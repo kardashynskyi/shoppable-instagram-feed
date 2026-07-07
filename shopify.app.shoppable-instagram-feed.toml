@@ -1,7 +1,7 @@
 # Learn more about configuring your app at https://shopify.dev/docs/apps/tools/cli/configuration
 
 client_id = "c52194d12514593aba2971b6a1df418a"
-application_url = "https://YOUR-RENDER-APP.onrender.com"
+application_url = "https://shoppable-instagram-feed.onrender.com"
 embedded = true
 name = "shoppable-instagram-feed"
 
@@ -10,7 +10,7 @@ name = "shoppable-instagram-feed"
 scopes = "write_metaobject_definitions,write_metaobjects,write_products"
 
 [auth]
-redirect_urls = [ "https://YOUR-RENDER-APP.onrender.com/auth/callback" ]
+redirect_urls = [ "https://shoppable-instagram-feed.onrender.com/auth/callback" ]
 
 [webhooks]
 api_version = "2026-10"
