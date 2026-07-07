@@ -2,7 +2,7 @@
 
 client_id = "15c4afc30b62e7e1510e7e9ee62e9fc8"
 name = "shoppable-instagram-feed"
-application_url = "https://example.com"
+application_url = "https://shoppable-instagram-feed.onrender.com"
 embedded = true
 
 [access_scopes]
@@ -45,7 +45,8 @@ api_version = "2026-10"
   topics = [ "app/scopes_update" ]
 
 [auth]
-redirect_urls = [ "https://example.com/api/auth" ]
+redirect_urls = [
+  "https://shoppable-instagram-feed.onrender.com/auth/callback"]
 
 [build]
 include_config_on_deploy = true
