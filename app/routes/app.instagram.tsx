@@ -118,26 +118,14 @@ export const action = async ({ request }: ActionFunctionArgs) => {
   if (intent === "create-tag") {
     const postId = String(formData.get("postId") || "").trim();
 
-    const productId = String(
-      formData.get("productId") || "",
-    ).trim();
+    const productId = String(formData.get("productId") || "").trim();
+    const productHandle = String(formData.get("productHandle") || "").trim();
+    const productTitle = String(formData.get("productTitle") || "").trim();
 
-    const productHandle = String(
-      formData.get("productHandle") || "",
-    ).trim();
-
-    const productTitle = String(
-      formData.get("productTitle") || "",
-    ).trim();
-
-    const collectionId = String(
-      formData.get("collectionId") || "",
-    ).trim();
-
+    const collectionId = String(formData.get("collectionId") || "").trim();
     const collectionHandle = String(
       formData.get("collectionHandle") || "",
     ).trim();
-
     const collectionTitle = String(
       formData.get("collectionTitle") || "",
     ).trim();
@@ -150,9 +138,7 @@ export const action = async ({ request }: ActionFunctionArgs) => {
       };
     }
 
-    const hasProduct =
-      productId || productHandle || productTitle;
-
+    const hasProduct = productId || productHandle || productTitle;
     const hasCollection =
       collectionId || collectionHandle || collectionTitle;
 
@@ -193,10 +179,7 @@ export const action = async ({ request }: ActionFunctionArgs) => {
       };
     }
 
-    const result = await deleteInstagramPostTag(
-      tagId,
-      session.shop,
-    );
+    const result = await deleteInstagramPostTag(tagId, session.shop);
 
     if (result.count === 0) {
       return {
@@ -221,17 +204,9 @@ export const action = async ({ request }: ActionFunctionArgs) => {
     };
   }
 
-  const mediaUrl = String(
-    formData.get("mediaUrl") || "",
-  ).trim();
-
-  const caption = String(
-    formData.get("caption") || "",
-  ).trim();
-
-  const mediaType = String(
-    formData.get("mediaType") || "IMAGE",
-  ).trim();
+  const mediaUrl = String(formData.get("mediaUrl") || "").trim();
+  const caption = String(formData.get("caption") || "").trim();
+  const mediaType = String(formData.get("mediaType") || "IMAGE").trim();
 
   if (!mediaUrl) {
     return {
@@ -276,12 +251,7 @@ export const action = async ({ request }: ActionFunctionArgs) => {
     };
   }
 
-  const allowedMediaTypes = [
-    "IMAGE",
-    "VIDEO",
-    "CAROUSEL_ALBUM",
-    "STORY",
-  ];
+  const allowedMediaTypes = ["IMAGE", "VIDEO", "CAROUSEL_ALBUM", "STORY"];
 
   if (!allowedMediaTypes.includes(mediaType)) {
     return {
@@ -307,12 +277,21 @@ export const action = async ({ request }: ActionFunctionArgs) => {
 };
 
 export default function InstagramPage() {
-  const { account, posts, stats } =
-    useLoaderData<typeof loader>();
-
+  const { account, posts, stats } = useLoaderData<typeof loader>();
   const actionData = useActionData<typeof action>();
   const navigation = useNavigation();
   const submit = useSubmit();
+
+  const fieldStyle = {
+    display: "block",
+    width: "100%",
+    boxSizing: "border-box" as const,
+    marginTop: "8px",
+    padding: "10px 12px",
+    border: "1px solid #8c9196",
+    borderRadius: "8px",
+    background: "#ffffff",
+  };
 
   const isCreatingPost =
     navigation.state === "submitting" &&
@@ -375,14 +354,8 @@ export default function InstagramPage() {
     formData.append("intent", "create-tag");
     formData.append("postId", postId);
     formData.append("collectionId", collection.id);
-    formData.append(
-      "collectionTitle",
-      collection.title || "",
-    );
-    formData.append(
-      "collectionHandle",
-      collection.handle || "",
-    );
+    formData.append("collectionTitle", collection.title || "");
+    formData.append("collectionHandle", collection.handle || "");
 
     submit(formData, {
       method: "post",
@@ -423,8 +396,7 @@ export default function InstagramPage() {
 
               <s-paragraph>
                 {stats.totalPosts}{" "}
-                {stats.totalPosts === 1 ? "post" : "posts"}{" "}
-                currently synced.
+                {stats.totalPosts === 1 ? "post" : "posts"} currently synced.
               </s-paragraph>
             </s-stack>
           </s-box>
@@ -440,9 +412,7 @@ export default function InstagramPage() {
 
               <s-paragraph>
                 {stats.shoppablePosts}{" "}
-                {stats.shoppablePosts === 1
-                  ? "post has"
-                  : "posts have"}{" "}
+                {stats.shoppablePosts === 1 ? "post has" : "posts have"}{" "}
                 products or collections tagged.
               </s-paragraph>
             </s-stack>
@@ -452,11 +422,7 @@ export default function InstagramPage() {
 
       <s-section heading="Add manual post">
         <Form method="post">
-          <input
-            type="hidden"
-            name="intent"
-            value="create-post"
-          />
+          <input type="hidden" name="intent" value="create-post" />
 
           <s-stack direction="block" gap="base">
             <label>
@@ -467,14 +433,7 @@ export default function InstagramPage() {
                 name="mediaUrl"
                 placeholder="https://example.com/image.jpg"
                 required
-                style={{
-                  display: "block",
-                  width: "100%",
-                  marginTop: "8px",
-                  padding: "10px",
-                  border: "1px solid #8c9196",
-                  borderRadius: "8px",
-                }}
+                style={fieldStyle}
               />
             </label>
 
@@ -486,12 +445,7 @@ export default function InstagramPage() {
                 placeholder="Enter an Instagram caption"
                 rows={4}
                 style={{
-                  display: "block",
-                  width: "100%",
-                  marginTop: "8px",
-                  padding: "10px",
-                  border: "1px solid #8c9196",
-                  borderRadius: "8px",
+                  ...fieldStyle,
                   resize: "vertical",
                 }}
               />
@@ -500,37 +454,20 @@ export default function InstagramPage() {
             <label>
               <strong>Media type</strong>
 
-              <select
-                name="mediaType"
-                defaultValue="IMAGE"
-                style={{
-                  display: "block",
-                  width: "100%",
-                  marginTop: "8px",
-                  padding: "10px",
-                  border: "1px solid #8c9196",
-                  borderRadius: "8px",
-                }}
-              >
+              <select name="mediaType" defaultValue="IMAGE" style={fieldStyle}>
                 <option value="IMAGE">Image</option>
                 <option value="VIDEO">Video</option>
-                <option value="CAROUSEL_ALBUM">
-                  Carousel
-                </option>
+                <option value="CAROUSEL_ALBUM">Carousel</option>
                 <option value="STORY">Story</option>
               </select>
             </label>
 
             {actionData?.error ? (
-              <s-paragraph>
-                {actionData.error}
-              </s-paragraph>
+              <s-paragraph>{actionData.error}</s-paragraph>
             ) : null}
 
             {actionData?.message ? (
-              <s-paragraph>
-                {actionData.message}
-              </s-paragraph>
+              <s-paragraph>{actionData.message}</s-paragraph>
             ) : null}
 
             <button
@@ -541,15 +478,11 @@ export default function InstagramPage() {
                 padding: "10px 16px",
                 border: 0,
                 borderRadius: "8px",
-                cursor: isCreatingPost
-                  ? "not-allowed"
-                  : "pointer",
+                cursor: isCreatingPost ? "not-allowed" : "pointer",
                 fontWeight: 600,
               }}
             >
-              {isCreatingPost
-                ? "Adding post..."
-                : "Add manual post"}
+              {isCreatingPost ? "Adding post..." : "Add manual post"}
             </button>
           </s-stack>
         </Form>
@@ -561,9 +494,9 @@ export default function InstagramPage() {
             <s-heading>No posts yet</s-heading>
 
             <s-paragraph>
-              Instagram posts will appear here after they are
-              added or synced. You will then be able to tag
-              Shopify products and collections to each post.
+              Instagram posts will appear here after they are added or synced.
+              You will then be able to tag Shopify products and collections to
+              each post.
             </s-paragraph>
           </s-stack>
         ) : (
@@ -579,9 +512,7 @@ export default function InstagramPage() {
                   {post.mediaType === "IMAGE" ? (
                     <img
                       src={post.mediaUrl}
-                      alt={
-                        post.caption || "Instagram post"
-                      }
+                      alt={post.caption || "Instagram post"}
                       style={{
                         width: "100%",
                         maxWidth: "320px",
@@ -592,19 +523,13 @@ export default function InstagramPage() {
                     />
                   ) : null}
 
-                  <s-heading>
-                    {post.caption || "Instagram post"}
-                  </s-heading>
+                  <s-heading>{post.caption || "Instagram post"}</s-heading>
 
-                  <s-paragraph>
-                    Media type: {post.mediaType}
-                  </s-paragraph>
+                  <s-paragraph>Media type: {post.mediaType}</s-paragraph>
 
                   <s-paragraph>
                     {post.tags.length}{" "}
-                    {post.tags.length === 1
-                      ? "tag"
-                      : "tags"}
+                    {post.tags.length === 1 ? "tag" : "tags"}
                   </s-paragraph>
 
                   {post.tags.length > 0 ? (
@@ -619,10 +544,7 @@ export default function InstagramPage() {
                           borderRadius="base"
                           background="subdued"
                         >
-                          <s-stack
-                            direction="block"
-                            gap="small"
-                          >
+                          <s-stack direction="block" gap="small">
                             {tag.productTitle ? (
                               <s-paragraph>
                                 Product: {tag.productTitle}
@@ -631,35 +553,29 @@ export default function InstagramPage() {
 
                             {tag.productHandle ? (
                               <s-paragraph>
-                                Product handle:{" "}
-                                {tag.productHandle}
+                                Product handle: {tag.productHandle}
                               </s-paragraph>
                             ) : null}
 
                             {tag.productId ? (
-                              <s-paragraph>
-                                Product ID: {tag.productId}
-                              </s-paragraph>
+                              <s-paragraph>Product ID: {tag.productId}</s-paragraph>
                             ) : null}
 
                             {tag.collectionTitle ? (
                               <s-paragraph>
-                                Collection:{" "}
-                                {tag.collectionTitle}
+                                Collection: {tag.collectionTitle}
                               </s-paragraph>
                             ) : null}
 
                             {tag.collectionHandle ? (
                               <s-paragraph>
-                                Collection handle:{" "}
-                                {tag.collectionHandle}
+                                Collection handle: {tag.collectionHandle}
                               </s-paragraph>
                             ) : null}
 
                             {tag.collectionId ? (
                               <s-paragraph>
-                                Collection ID:{" "}
-                                {tag.collectionId}
+                                Collection ID: {tag.collectionId}
                               </s-paragraph>
                             ) : null}
 
@@ -681,8 +597,7 @@ export default function InstagramPage() {
                                 style={{
                                   width: "fit-content",
                                   padding: "8px 12px",
-                                  border:
-                                    "1px solid #8c9196",
+                                  border: "1px solid #8c9196",
                                   borderRadius: "8px",
                                   cursor: "pointer",
                                   fontWeight: 600,
@@ -700,9 +615,7 @@ export default function InstagramPage() {
                   <s-stack direction="inline" gap="base">
                     <button
                       type="button"
-                      onClick={() =>
-                        handlePickProduct(post.id)
-                      }
+                      onClick={() => handlePickProduct(post.id)}
                       style={{
                         width: "fit-content",
                         padding: "10px 16px",
@@ -717,9 +630,7 @@ export default function InstagramPage() {
 
                     <button
                       type="button"
-                      onClick={() =>
-                        handlePickCollection(post.id)
-                      }
+                      onClick={() => handlePickCollection(post.id)}
                       style={{
                         width: "fit-content",
                         padding: "10px 16px",
@@ -740,25 +651,11 @@ export default function InstagramPage() {
                     background="subdued"
                   >
                     <Form method="post">
-                      <input
-                        type="hidden"
-                        name="intent"
-                        value="create-tag"
-                      />
+                      <input type="hidden" name="intent" value="create-tag" />
+                      <input type="hidden" name="postId" value={post.id} />
 
-                      <input
-                        type="hidden"
-                        name="postId"
-                        value={post.id}
-                      />
-
-                      <s-stack
-                        direction="block"
-                        gap="base"
-                      >
-                        <s-heading>
-                          Manual tag fallback
-                        </s-heading>
+                      <s-stack direction="block" gap="base">
+                        <s-heading>Manual tag fallback</s-heading>
 
                         <label>
                           <strong>Product ID</strong>
@@ -767,36 +664,18 @@ export default function InstagramPage() {
                             type="text"
                             name="productId"
                             placeholder="gid://shopify/Product/..."
-                            style={{
-                              display: "block",
-                              width: "100%",
-                              marginTop: "8px",
-                              padding: "10px",
-                              border:
-                                "1px solid #8c9196",
-                              borderRadius: "8px",
-                            }}
+                            style={fieldStyle}
                           />
                         </label>
 
                         <label>
-                          <strong>
-                            Product handle
-                          </strong>
+                          <strong>Product handle</strong>
 
                           <input
                             type="text"
                             name="productHandle"
                             placeholder="wool-socks"
-                            style={{
-                              display: "block",
-                              width: "100%",
-                              marginTop: "8px",
-                              padding: "10px",
-                              border:
-                                "1px solid #8c9196",
-                              borderRadius: "8px",
-                            }}
+                            style={fieldStyle}
                           />
                         </label>
 
@@ -807,15 +686,7 @@ export default function InstagramPage() {
                             type="text"
                             name="productTitle"
                             placeholder="Carpathian Wool Socks"
-                            style={{
-                              display: "block",
-                              width: "100%",
-                              marginTop: "8px",
-                              padding: "10px",
-                              border:
-                                "1px solid #8c9196",
-                              borderRadius: "8px",
-                            }}
+                            style={fieldStyle}
                           />
                         </label>
 
@@ -826,57 +697,29 @@ export default function InstagramPage() {
                             type="text"
                             name="collectionId"
                             placeholder="gid://shopify/Collection/..."
-                            style={{
-                              display: "block",
-                              width: "100%",
-                              marginTop: "8px",
-                              padding: "10px",
-                              border:
-                                "1px solid #8c9196",
-                              borderRadius: "8px",
-                            }}
+                            style={fieldStyle}
                           />
                         </label>
 
                         <label>
-                          <strong>
-                            Collection handle
-                          </strong>
+                          <strong>Collection handle</strong>
 
                           <input
                             type="text"
                             name="collectionHandle"
                             placeholder="winter-collection"
-                            style={{
-                              display: "block",
-                              width: "100%",
-                              marginTop: "8px",
-                              padding: "10px",
-                              border:
-                                "1px solid #8c9196",
-                              borderRadius: "8px",
-                            }}
+                            style={fieldStyle}
                           />
                         </label>
 
                         <label>
-                          <strong>
-                            Collection title
-                          </strong>
+                          <strong>Collection title</strong>
 
                           <input
                             type="text"
                             name="collectionTitle"
                             placeholder="Winter Collection"
-                            style={{
-                              display: "block",
-                              width: "100%",
-                              marginTop: "8px",
-                              padding: "10px",
-                              border:
-                                "1px solid #8c9196",
-                              borderRadius: "8px",
-                            }}
+                            style={fieldStyle}
                           />
                         </label>
 
@@ -897,22 +740,11 @@ export default function InstagramPage() {
                     </Form>
                   </s-box>
 
-                  <s-paragraph>
-                    Media URL: {post.mediaUrl}
-                  </s-paragraph>
+                  <s-paragraph>Media URL: {post.mediaUrl}</s-paragraph>
 
                   <Form method="post">
-                    <input
-                      type="hidden"
-                      name="intent"
-                      value="delete-post"
-                    />
-
-                    <input
-                      type="hidden"
-                      name="postId"
-                      value={post.id}
-                    />
+                    <input type="hidden" name="intent" value="delete-post" />
+                    <input type="hidden" name="postId" value={post.id} />
 
                     <button
                       type="submit"
@@ -937,9 +769,8 @@ export default function InstagramPage() {
 
       <s-section slot="aside" heading="Next step">
         <s-paragraph>
-          After product and collection picking works, build the
-          storefront feed with product links and add-to-cart
-          actions.
+          After product and collection picking works, build the storefront feed
+          with product links and add-to-cart actions.
         </s-paragraph>
       </s-section>
     </s-page>
