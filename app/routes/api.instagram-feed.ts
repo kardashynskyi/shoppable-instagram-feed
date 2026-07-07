@@ -1,5 +1,4 @@
 import type { LoaderFunctionArgs } from "react-router";
-import { json } from "react-router";
 import db from "../db.server";
 
 export const loader = async ({ request }: LoaderFunctionArgs) => {
@@ -7,7 +6,7 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
   const shop = url.searchParams.get("shop");
 
   if (!shop) {
-    return json(
+    return Response.json(
       { error: "Missing shop parameter." },
       { status: 400 },
     );
@@ -26,7 +25,7 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
     },
   });
 
-  return json({
+  return Response.json({
     posts: posts.map((post) => ({
       id: post.id,
       mediaUrl: post.mediaUrl,
