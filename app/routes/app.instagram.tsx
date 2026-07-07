@@ -13,6 +13,7 @@ import { authenticate } from "../shopify.server";
 import { boundary } from "@shopify/shopify-app-react-router/server";
 import {
   createInstagramPost,
+  deleteInstagramPost,
   getInstagramAccount,
   getInstagramPosts,
 } from "../models/instagram-feed.server";
@@ -49,11 +50,40 @@ export const action = async ({ request }: ActionFunctionArgs) => {
   const { session } = await authenticate.admin(request);
   const formData = await request.formData();
 
-  const intent = formData.get("intent");
+  const intent = String(formData.get("intent") || "");
+
+  if (intent === "delete-post") {
+    const postId = String(formData.get("postId") || "").trim();
+
+    if (!postId) {
+      return {
+        success: false,
+        message: null,
+        error: "Post ID is required.",
+      };
+    }
+
+    const result = await deleteInstagramPost(postId, session.shop);
+
+    if (result.count === 0) {
+      return {
+        success: false,
+        message: null,
+        error: "Post not found.",
+      };
+    }
+
+    return {
+      success: true,
+      message: "Post deleted successfully.",
+      error: null,
+    };
+  }
 
   if (intent !== "create-post") {
     return {
       success: false,
+      message: null,
       error: "Invalid form action.",
     };
   }
@@ -65,16 +95,43 @@ export const action = async ({ request }: ActionFunctionArgs) => {
   if (!mediaUrl) {
     return {
       success: false,
+      message: null,
       error: "Media URL is required.",
     };
   }
 
+  let parsedUrl: URL;
+
   try {
-    new URL(mediaUrl);
+    parsedUrl = new URL(mediaUrl);
   } catch {
     return {
       success: false,
+      message: null,
       error: "Enter a valid media URL.",
+    };
+  }
+
+  if (!["http:", "https:"].includes(parsedUrl.protocol)) {
+    return {
+      success: false,
+      message: null,
+      error: "Media URL must use http or https.",
+    };
+  }
+
+  const hostname = parsedUrl.hostname.toLowerCase();
+
+  if (
+    hostname === "instagram.com" ||
+    hostname === "www.instagram.com" ||
+    hostname.endsWith(".instagram.com")
+  ) {
+    return {
+      success: false,
+      message: null,
+      error:
+        "Instagram page URLs are not direct media files. Enter a direct image or video URL.",
     };
   }
 
@@ -88,6 +145,7 @@ export const action = async ({ request }: ActionFunctionArgs) => {
   if (!allowedMediaTypes.includes(mediaType)) {
     return {
       success: false,
+      message: null,
       error: "Invalid media type.",
     };
   }
@@ -102,6 +160,7 @@ export const action = async ({ request }: ActionFunctionArgs) => {
 
   return {
     success: true,
+    message: "Manual post added successfully.",
     error: null,
   };
 };
@@ -111,7 +170,7 @@ export default function InstagramPage() {
   const actionData = useActionData<typeof action>();
   const navigation = useNavigation();
 
-  const isSubmitting =
+  const isCreating =
     navigation.state === "submitting" &&
     navigation.formData?.get("intent") === "create-post";
 
@@ -127,7 +186,6 @@ export default function InstagramPage() {
           >
             <s-stack direction="block" gap="small">
               <s-heading>Instagram account</s-heading>
-
               <s-paragraph>
                 {account?.connected
                   ? account.username
@@ -146,7 +204,6 @@ export default function InstagramPage() {
           >
             <s-stack direction="block" gap="small">
               <s-heading>Synced posts</s-heading>
-
               <s-paragraph>
                 {stats.totalPosts}{" "}
                 {stats.totalPosts === 1 ? "post" : "posts"} currently synced.
@@ -162,7 +219,6 @@ export default function InstagramPage() {
           >
             <s-stack direction="block" gap="small">
               <s-heading>Shoppable posts</s-heading>
-
               <s-paragraph>
                 {stats.shoppablePosts}{" "}
                 {stats.shoppablePosts === 1 ? "post has" : "posts have"}{" "}
@@ -173,7 +229,7 @@ export default function InstagramPage() {
         </s-stack>
       </s-section>
 
-      <s-section heading="Add test Instagram post">
+      <s-section heading="Add manual post">
         <Form method="post">
           <input type="hidden" name="intent" value="create-post" />
 
@@ -239,25 +295,23 @@ export default function InstagramPage() {
               <s-paragraph>{actionData.error}</s-paragraph>
             ) : null}
 
-            {actionData?.success ? (
-              <s-paragraph>
-                Test Instagram post added successfully.
-              </s-paragraph>
+            {actionData?.message ? (
+              <s-paragraph>{actionData.message}</s-paragraph>
             ) : null}
 
             <button
               type="submit"
-              disabled={isSubmitting}
+              disabled={isCreating}
               style={{
                 width: "fit-content",
                 padding: "10px 16px",
                 border: 0,
                 borderRadius: "8px",
-                cursor: isSubmitting ? "not-allowed" : "pointer",
+                cursor: isCreating ? "not-allowed" : "pointer",
                 fontWeight: 600,
               }}
             >
-              {isSubmitting ? "Adding post..." : "Add Instagram post"}
+              {isCreating ? "Adding post..." : "Add manual post"}
             </button>
           </s-stack>
         </Form>
@@ -267,7 +321,6 @@ export default function InstagramPage() {
         {posts.length === 0 ? (
           <s-stack direction="block" gap="base">
             <s-heading>No posts yet</s-heading>
-
             <s-paragraph>
               Instagram posts will appear here after they are added or synced.
               You will then be able to tag Shopify products and collections to
@@ -284,22 +337,36 @@ export default function InstagramPage() {
                 borderRadius="base"
               >
                 <s-stack direction="block" gap="small">
-                  <s-heading>
-                    {post.caption || "Instagram post"}
-                  </s-heading>
+                  <s-heading>{post.caption || "Instagram post"}</s-heading>
 
-                  <s-paragraph>
-                    Media type: {post.mediaType}
-                  </s-paragraph>
+                  <s-paragraph>Media type: {post.mediaType}</s-paragraph>
 
                   <s-paragraph>
                     {post.tags.length}{" "}
                     {post.tags.length === 1 ? "tag" : "tags"}
                   </s-paragraph>
 
-                  <s-paragraph>
-                    Media URL: {post.mediaUrl}
-                  </s-paragraph>
+                  <s-paragraph>Media URL: {post.mediaUrl}</s-paragraph>
+
+                  <Form method="post">
+                    <input type="hidden" name="intent" value="delete-post" />
+                    <input type="hidden" name="postId" value={post.id} />
+
+                    <button
+                      type="submit"
+                      style={{
+                        width: "fit-content",
+                        marginTop: "8px",
+                        padding: "8px 12px",
+                        border: "1px solid #8c9196",
+                        borderRadius: "8px",
+                        cursor: "pointer",
+                        fontWeight: 600,
+                      }}
+                    >
+                      Delete post
+                    </button>
+                  </Form>
                 </s-stack>
               </s-box>
             ))}
@@ -309,7 +376,7 @@ export default function InstagramPage() {
 
       <s-section slot="aside" heading="Next step">
         <s-paragraph>
-          Once test posts are stored successfully, the next step is Shopify
+          Once manual posts are stored successfully, the next step is Shopify
           product and collection tagging.
         </s-paragraph>
       </s-section>
