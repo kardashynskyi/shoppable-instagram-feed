@@ -1,66 +1,490 @@
 <div
   class="sig-feed"
-  data-shop="{{ shop.permanent_domain }}"
+  data-sig-feed
+  data-shop="{{ shop.permanent_domain | escape }}"
   data-limit="{{ block.settings.limit }}"
   data-api-url="https://shoppable-instagram-feed.onrender.com/api/instagram-feed"
 >
   <div class="sig-feed__header">
-    <p class="sig-feed__eyebrow">{{ block.settings.eyebrow }}</p>
-    <h2 class="sig-feed__heading">{{ block.settings.heading }}</h2>
+    <div>
+      {% if block.settings.eyebrow != blank %}
+        <p class="sig-feed__eyebrow">
+          {{ block.settings.eyebrow | escape }}
+        </p>
+      {% endif %}
+
+      {% if block.settings.heading != blank %}
+        <h2 class="sig-feed__heading">
+          {{ block.settings.heading | escape }}
+        </h2>
+      {% endif %}
+    </div>
   </div>
 
-  <div class="sig-feed__grid" id="sig-feed-{{ block.id }}">
-    <p>Loading Instagram feed...</p>
+  <div
+    class="sig-feed__grid"
+    id="sig-feed-{{ block.id }}"
+    aria-live="polite"
+  >
+    <p class="sig-feed__message">
+      Loading Instagram feed...
+    </p>
   </div>
 </div>
 
 <script>
   (() => {
-    const section = document.currentScript.previousElementSibling;
+    const script = document.currentScript;
+    const section = script?.previousElementSibling;
+
+    if (!section || !section.matches("[data-sig-feed]")) {
+      return;
+    }
+
     const grid = section.querySelector(".sig-feed__grid");
     const shop = section.dataset.shop;
     const limit = Number(section.dataset.limit || 6);
     const apiUrl = section.dataset.apiUrl;
 
-    fetch(`${apiUrl}?shop=${encodeURIComponent(shop)}`)
-      .then((response) => response.json())
+    if (!grid || !shop || !apiUrl) {
+      return;
+    }
+
+    const escapeHtml = (value) => {
+      return String(value ?? "")
+        .replaceAll("&", "&amp;")
+        .replaceAll("<", "&lt;")
+        .replaceAll(">", "&gt;")
+        .replaceAll('"', "&quot;")
+        .replaceAll("'", "&#039;");
+    };
+
+    const safeUrl = (value) => {
+      if (!value) {
+        return "";
+      }
+
+      try {
+        const url = new URL(value, window.location.origin);
+
+        if (url.protocol !== "http:" && url.protocol !== "https:") {
+          return "";
+        }
+
+        return url.href;
+      } catch {
+        return "";
+      }
+    };
+
+    const buildHref = (post) => {
+      const tag =
+        Array.isArray(post.tags) && post.tags.length > 0
+          ? post.tags[0]
+          : null;
+
+      if (tag?.productHandle) {
+        return `/products/${encodeURIComponent(tag.productHandle)}`;
+      }
+
+      if (tag?.collectionHandle) {
+        return `/collections/${encodeURIComponent(tag.collectionHandle)}`;
+      }
+
+      return safeUrl(post.permalink) || "#";
+    };
+
+    const renderPost = (post) => {
+      const mediaUrl = safeUrl(post.mediaUrl);
+
+      if (!mediaUrl) {
+        return "";
+      }
+
+      const href = buildHref(post);
+      const caption = escapeHtml(post.caption || "Instagram post");
+      const hasTag =
+        Array.isArray(post.tags) && post.tags.length > 0;
+
+      const media =
+        post.mediaType === "VIDEO"
+          ? `
+            <video
+              src="${escapeHtml(mediaUrl)}"
+              muted
+              loop
+              playsinline
+              autoplay
+              preload="metadata"
+              aria-label="${caption}"
+            ></video>
+          `
+          : `
+            <img
+              src="${escapeHtml(mediaUrl)}"
+              alt="${caption}"
+              loading="lazy"
+              width="800"
+              height="800"
+            >
+          `;
+
+      return `
+        <a
+          class="sig-feed__item"
+          href="${escapeHtml(href)}"
+          ${href === "#" ? 'aria-disabled="true"' : ""}
+        >
+          ${media}
+
+          ${
+            hasTag
+              ? `
+                <span class="sig-feed__badge">
+                  Shop now
+                </span>
+              `
+              : ""
+          }
+        </a>
+      `;
+    };
+
+    fetch(
+      `${apiUrl}?shop=${encodeURIComponent(shop)}`,
+      {
+        method: "GET",
+        headers: {
+          Accept: "application/json"
+        }
+      }
+    )
+      .then((response) => {
+        if (!response.ok) {
+          throw new Error(
+            `Feed request failed with status ${response.status}`
+          );
+        }
+
+        return response.json();
+      })
       .then((data) => {
-        const posts = (data.posts || []).slice(0, limit);
+        const posts = Array.isArray(data.posts)
+          ? data.posts.slice(0, limit)
+          : [];
 
         if (!posts.length) {
-          grid.innerHTML = "<p>No Instagram posts found.</p>";
+          grid.innerHTML = `
+            <p class="sig-feed__message">
+              No Instagram posts found.
+            </p>
+          `;
           return;
         }
 
-        grid.innerHTML = posts
-          .map((post) => {
-            const tag = post.tags && post.tags[0];
-            const href = tag?.productHandle
-              ? `/products/${tag.productHandle}`
-              : tag?.collectionHandle
-                ? `/collections/${tag.collectionHandle}`
-                : post.permalink || "#";
-
-            return `
-              <a class="sig-feed__item" href="${href}">
-                ${
-                  post.mediaType === "VIDEO"
-                    ? `<video src="${post.mediaUrl}" muted loop playsinline></video>`
-                    : `<img src="${post.mediaUrl}" alt="${post.caption || "Instagram post"}" loading="lazy">`
-                }
-
-                ${
-                  tag
-                    ? `<span class="sig-feed__badge">Shop now</span>`
-                    : ""
-                }
-              </a>
-            `;
-          })
+        const markup = posts
+          .map(renderPost)
+          .filter(Boolean)
           .join("");
+
+        if (!markup) {
+          grid.innerHTML = `
+            <p class="sig-feed__message">
+              No Instagram media available.
+            </p>
+          `;
+          return;
+        }
+
+        grid.innerHTML = markup;
       })
-      .catch(() => {
-        grid.innerHTML = "<p>Instagram feed could not be loaded.</p>";
+      .catch((error) => {
+        console.error(
+          "Shoppable Instagram Feed error:",
+          error
+        );
+
+        grid.innerHTML = `
+          <p class="sig-feed__message">
+            Instagram feed could not be loaded.
+          </p>
+        `;
       });
   })();
 </script>
+
+<style>
+  .sig-feed {
+    max-width: {{ block.settings.width }}px;
+    margin: 0 auto;
+    padding:
+      {{ block.settings.padding_top }}px
+      20px
+      {{ block.settings.padding_bottom }}px;
+  }
+
+  .sig-feed__header {
+    display: flex;
+    align-items: end;
+    justify-content: space-between;
+    gap: 24px;
+    margin-bottom: 28px;
+  }
+
+  .sig-feed__eyebrow {
+    margin: 0 0 10px;
+    font-size: 13px;
+    line-height: 1.3;
+    letter-spacing: 0.14em;
+    text-transform: uppercase;
+    opacity: 0.65;
+  }
+
+  .sig-feed__heading {
+    margin: 0;
+    font-size: {{ block.settings.heading_size }}px;
+    line-height: 1.05;
+    letter-spacing: -0.04em;
+  }
+
+  .sig-feed__grid {
+    display: grid;
+    grid-template-columns:
+      repeat({{ block.settings.columns }}, minmax(0, 1fr));
+    gap: {{ block.settings.gap }}px;
+  }
+
+  .sig-feed__message {
+    grid-column: 1 / -1;
+    margin: 0;
+  }
+
+  .sig-feed__item {
+    position: relative;
+    display: block;
+    aspect-ratio: 1 / 1;
+    overflow: hidden;
+    background: #f4f4f4;
+    border-radius: {{ block.settings.image_radius }}px;
+    color: inherit;
+    text-decoration: none;
+  }
+
+  .sig-feed__item[aria-disabled="true"] {
+    cursor: default;
+  }
+
+  .sig-feed__item img,
+  .sig-feed__item video {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    display: block;
+    transition: transform 240ms ease;
+  }
+
+  .sig-feed__item:hover img,
+  .sig-feed__item:hover video {
+    transform: scale(1.025);
+  }
+
+  .sig-feed__badge {
+    position: absolute;
+    left: 12px;
+    bottom: 12px;
+    z-index: 2;
+    display: inline-flex;
+    align-items: center;
+    min-height: 34px;
+    padding: 7px 12px;
+    border-radius: 999px;
+    background: rgba(255, 255, 255, 0.94);
+    color: #111111;
+    font-size: 13px;
+    font-weight: 600;
+    line-height: 1;
+    box-shadow: 0 2px 10px rgba(0, 0, 0, 0.12);
+    backdrop-filter: blur(8px);
+  }
+
+  @media screen and (max-width: 768px) {
+    .sig-feed {
+      padding:
+        {{ block.settings.padding_top_mobile }}px
+        0
+        {{ block.settings.padding_bottom_mobile }}px
+        16px;
+    }
+
+    .sig-feed__header {
+      display: block;
+      padding-right: 16px;
+      margin-bottom: 22px;
+    }
+
+    .sig-feed__grid {
+      display: flex;
+      overflow-x: auto;
+      gap: {{ block.settings.gap_mobile }}px;
+      padding-right: 16px;
+      scroll-snap-type: x mandatory;
+      scrollbar-width: none;
+      -webkit-overflow-scrolling: touch;
+    }
+
+    .sig-feed__grid::-webkit-scrollbar {
+      display: none;
+    }
+
+    .sig-feed__item {
+      flex: 0 0 72%;
+      scroll-snap-align: start;
+    }
+
+    .sig-feed__message {
+      flex: 0 0 auto;
+      padding-right: 16px;
+    }
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .sig-feed__item img,
+    .sig-feed__item video {
+      transition: none;
+    }
+
+    .sig-feed__item:hover img,
+    .sig-feed__item:hover video {
+      transform: none;
+    }
+  }
+</style>
+
+{% schema %}
+{
+  "name": "Shoppable Instagram Feed",
+  "target": "section",
+  "settings": [
+    {
+      "type": "text",
+      "id": "eyebrow",
+      "label": "Eyebrow",
+      "default": "Follow us"
+    },
+    {
+      "type": "text",
+      "id": "heading",
+      "label": "Heading",
+      "default": "Shop our Instagram"
+    },
+    {
+      "type": "range",
+      "id": "limit",
+      "label": "Number of posts",
+      "min": 3,
+      "max": 12,
+      "step": 1,
+      "default": 6
+    },
+    {
+      "type": "range",
+      "id": "columns",
+      "label": "Desktop columns",
+      "min": 3,
+      "max": 6,
+      "step": 1,
+      "default": 6
+    },
+    {
+      "type": "range",
+      "id": "gap",
+      "label": "Desktop gap",
+      "min": 0,
+      "max": 32,
+      "step": 1,
+      "default": 12,
+      "unit": "px"
+    },
+    {
+      "type": "range",
+      "id": "gap_mobile",
+      "label": "Mobile gap",
+      "min": 0,
+      "max": 24,
+      "step": 1,
+      "default": 10,
+      "unit": "px"
+    },
+    {
+      "type": "range",
+      "id": "image_radius",
+      "label": "Image corner radius",
+      "min": 0,
+      "max": 32,
+      "step": 1,
+      "default": 0,
+      "unit": "px"
+    },
+    {
+      "type": "range",
+      "id": "heading_size",
+      "label": "Heading size",
+      "min": 22,
+      "max": 72,
+      "step": 1,
+      "default": 42,
+      "unit": "px"
+    },
+    {
+      "type": "range",
+      "id": "width",
+      "label": "Section width",
+      "min": 900,
+      "max": 1800,
+      "step": 20,
+      "default": 1400,
+      "unit": "px"
+    },
+    {
+      "type": "range",
+      "id": "padding_top",
+      "label": "Top spacing desktop",
+      "min": 0,
+      "max": 200,
+      "step": 4,
+      "default": 64,
+      "unit": "px"
+    },
+    {
+      "type": "range",
+      "id": "padding_bottom",
+      "label": "Bottom spacing desktop",
+      "min": 0,
+      "max": 200,
+      "step": 4,
+      "default": 64,
+      "unit": "px"
+    },
+    {
+      "type": "range",
+      "id": "padding_top_mobile",
+      "label": "Top spacing mobile",
+      "min": 0,
+      "max": 160,
+      "step": 4,
+      "default": 44,
+      "unit": "px"
+    },
+    {
+      "type": "range",
+      "id": "padding_bottom_mobile",
+      "label": "Bottom spacing mobile",
+      "min": 0,
+      "max": 160,
+      "step": 4,
+      "default": 44,
+      "unit": "px"
+    }
+  ]
+}
+{% endschema %}
