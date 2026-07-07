@@ -1,11 +1,18 @@
 import type {
+  ActionFunctionArgs,
   HeadersFunction,
   LoaderFunctionArgs,
 } from "react-router";
-import { useLoaderData } from "react-router";
+import {
+  Form,
+  useActionData,
+  useLoaderData,
+  useNavigation,
+} from "react-router";
 import { authenticate } from "../shopify.server";
 import { boundary } from "@shopify/shopify-app-react-router/server";
 import {
+  createInstagramPost,
   getInstagramAccount,
   getInstagramPosts,
 } from "../models/instagram-feed.server";
@@ -38,9 +45,75 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
   };
 };
 
+export const action = async ({ request }: ActionFunctionArgs) => {
+  const { session } = await authenticate.admin(request);
+  const formData = await request.formData();
+
+  const intent = formData.get("intent");
+
+  if (intent !== "create-post") {
+    return {
+      success: false,
+      error: "Invalid form action.",
+    };
+  }
+
+  const mediaUrl = String(formData.get("mediaUrl") || "").trim();
+  const caption = String(formData.get("caption") || "").trim();
+  const mediaType = String(formData.get("mediaType") || "IMAGE").trim();
+
+  if (!mediaUrl) {
+    return {
+      success: false,
+      error: "Media URL is required.",
+    };
+  }
+
+  try {
+    new URL(mediaUrl);
+  } catch {
+    return {
+      success: false,
+      error: "Enter a valid media URL.",
+    };
+  }
+
+  const allowedMediaTypes = [
+    "IMAGE",
+    "VIDEO",
+    "CAROUSEL_ALBUM",
+    "STORY",
+  ];
+
+  if (!allowedMediaTypes.includes(mediaType)) {
+    return {
+      success: false,
+      error: "Invalid media type.",
+    };
+  }
+
+  await createInstagramPost({
+    shop: session.shop,
+    mediaUrl,
+    caption: caption || undefined,
+    mediaType,
+    timestamp: new Date(),
+  });
+
+  return {
+    success: true,
+    error: null,
+  };
+};
+
 export default function InstagramPage() {
-  const { account, posts, stats } =
-    useLoaderData<typeof loader>();
+  const { account, posts, stats } = useLoaderData<typeof loader>();
+  const actionData = useActionData<typeof action>();
+  const navigation = useNavigation();
+
+  const isSubmitting =
+    navigation.state === "submitting" &&
+    navigation.formData?.get("intent") === "create-post";
 
   return (
     <s-page heading="Instagram feed">
@@ -100,6 +173,96 @@ export default function InstagramPage() {
         </s-stack>
       </s-section>
 
+      <s-section heading="Add test Instagram post">
+        <Form method="post">
+          <input type="hidden" name="intent" value="create-post" />
+
+          <s-stack direction="block" gap="base">
+            <label>
+              <strong>Media URL</strong>
+              <input
+                type="url"
+                name="mediaUrl"
+                placeholder="https://example.com/image.jpg"
+                required
+                style={{
+                  display: "block",
+                  width: "100%",
+                  marginTop: "8px",
+                  padding: "10px",
+                  border: "1px solid #8c9196",
+                  borderRadius: "8px",
+                }}
+              />
+            </label>
+
+            <label>
+              <strong>Caption</strong>
+              <textarea
+                name="caption"
+                placeholder="Enter an Instagram caption"
+                rows={4}
+                style={{
+                  display: "block",
+                  width: "100%",
+                  marginTop: "8px",
+                  padding: "10px",
+                  border: "1px solid #8c9196",
+                  borderRadius: "8px",
+                  resize: "vertical",
+                }}
+              />
+            </label>
+
+            <label>
+              <strong>Media type</strong>
+              <select
+                name="mediaType"
+                defaultValue="IMAGE"
+                style={{
+                  display: "block",
+                  width: "100%",
+                  marginTop: "8px",
+                  padding: "10px",
+                  border: "1px solid #8c9196",
+                  borderRadius: "8px",
+                }}
+              >
+                <option value="IMAGE">Image</option>
+                <option value="VIDEO">Video</option>
+                <option value="CAROUSEL_ALBUM">Carousel</option>
+                <option value="STORY">Story</option>
+              </select>
+            </label>
+
+            {actionData?.error ? (
+              <s-paragraph>{actionData.error}</s-paragraph>
+            ) : null}
+
+            {actionData?.success ? (
+              <s-paragraph>
+                Test Instagram post added successfully.
+              </s-paragraph>
+            ) : null}
+
+            <button
+              type="submit"
+              disabled={isSubmitting}
+              style={{
+                width: "fit-content",
+                padding: "10px 16px",
+                border: 0,
+                borderRadius: "8px",
+                cursor: isSubmitting ? "not-allowed" : "pointer",
+                fontWeight: 600,
+              }}
+            >
+              {isSubmitting ? "Adding post..." : "Add Instagram post"}
+            </button>
+          </s-stack>
+        </Form>
+      </s-section>
+
       <s-section heading="Instagram posts">
         {posts.length === 0 ? (
           <s-stack direction="block" gap="base">
@@ -133,6 +296,10 @@ export default function InstagramPage() {
                     {post.tags.length}{" "}
                     {post.tags.length === 1 ? "tag" : "tags"}
                   </s-paragraph>
+
+                  <s-paragraph>
+                    Media URL: {post.mediaUrl}
+                  </s-paragraph>
                 </s-stack>
               </s-box>
             ))}
@@ -141,16 +308,10 @@ export default function InstagramPage() {
       </s-section>
 
       <s-section slot="aside" heading="Next step">
-        <s-stack direction="block" gap="base">
-          <s-paragraph>
-            Add product and collection tagging before connecting automatic
-            Instagram sync.
-          </s-paragraph>
-
-          <s-button variant="primary">
-            Add Instagram post
-          </s-button>
-        </s-stack>
+        <s-paragraph>
+          Once test posts are stored successfully, the next step is Shopify
+          product and collection tagging.
+        </s-paragraph>
       </s-section>
     </s-page>
   );
