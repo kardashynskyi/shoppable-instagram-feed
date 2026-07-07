@@ -32,3 +32,70 @@ model Session {
   refreshToken        String?
   refreshTokenExpires DateTime?
 }
+model InstagramAccount {
+  id          String   @id @default(cuid())
+  shop        String
+  instagramId String?
+  username    String?
+  accessToken String?
+  connected   Boolean  @default(false)
+
+  posts       InstagramPost[]
+
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@index([shop])
+}
+
+model InstagramPost {
+  id             String   @id @default(cuid())
+  shop           String
+  instagramId    String?  @unique
+  accountId      String?
+
+  mediaUrl       String
+  permalink      String?
+  caption        String?
+  mediaType      String   @default("IMAGE") // IMAGE, VIDEO, CAROUSEL_ALBUM, STORY
+  thumbnailUrl   String?
+  timestamp      DateTime?
+
+  isPublished    Boolean  @default(true)
+
+  account        InstagramAccount? @relation(fields: [accountId], references: [id], onDelete: SetNull)
+  tags           InstagramPostTag[]
+
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  @@index([shop])
+  @@index([accountId])
+}
+
+model InstagramPostTag {
+  id              String   @id @default(cuid())
+  shop            String
+  postId          String
+
+  productId       String?
+  productHandle   String?
+  productTitle    String?
+
+  collectionId    String?
+  collectionHandle String?
+  collectionTitle  String?
+
+  xPosition       Float?
+  yPosition       Float?
+
+  post            InstagramPost @relation(fields: [postId], references: [id], onDelete: Cascade)
+
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  @@index([shop])
+  @@index([postId])
+  @@index([productId])
+  @@index([collectionId])
+}
