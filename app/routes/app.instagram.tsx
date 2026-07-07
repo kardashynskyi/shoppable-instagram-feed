@@ -337,6 +337,19 @@ export default function InstagramPage() {
                 borderRadius="base"
               >
                 <s-stack direction="block" gap="small">
+                    {post.mediaType === "IMAGE" ? (
+  <img
+    src={post.mediaUrl}
+    alt={post.caption || "Instagram post"}
+    style={{
+      width: "100%",
+      maxWidth: "320px",
+      height: "auto",
+      borderRadius: "8px",
+      display: "block",
+    }}
+  />
+) : null}
                   <s-heading>{post.caption || "Instagram post"}</s-heading>
 
                   <s-paragraph>Media type: {post.mediaType}</s-paragraph>
