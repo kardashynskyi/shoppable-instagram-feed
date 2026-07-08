@@ -49,6 +49,7 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
         tags: post.tags.map((tag) => ({
           id: tag.id,
           productId: tag.productId,
+          variantId: tag.variantId,
           productHandle: tag.productHandle,
           productTitle: tag.productTitle,
           collectionId: tag.collectionId,
