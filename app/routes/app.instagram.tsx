@@ -21,10 +21,16 @@ import {
   tagInstagramPost,
 } from "../models/instagram-feed.server";
 
+type ShopifyPickedVariant = {
+  id: string;
+  title?: string;
+};
+
 type ShopifyPickedResource = {
   id: string;
   title?: string;
   handle?: string;
+  variants?: ShopifyPickedVariant[];
 };
 
 declare global {
@@ -119,6 +125,9 @@ export const action = async ({ request }: ActionFunctionArgs) => {
     const postId = String(formData.get("postId") || "").trim();
 
     const productId = String(formData.get("productId") || "").trim();
+   const variantId = String(
+  formData.get("variantId") || "",
+).trim();
     const productHandle = String(formData.get("productHandle") || "").trim();
     const productTitle = String(formData.get("productTitle") || "").trim();
 
@@ -138,7 +147,7 @@ export const action = async ({ request }: ActionFunctionArgs) => {
       };
     }
 
-    const hasProduct = productId || productHandle || productTitle;
+    const hasProduct = productId || variantId || productHandle || productTitle;
     const hasCollection =
       collectionId || collectionHandle || collectionTitle;
 
@@ -154,6 +163,7 @@ export const action = async ({ request }: ActionFunctionArgs) => {
       shop: session.shop,
       postId,
       productId: productId || undefined,
+      variantId: variantId || undefined,
       productHandle: productHandle || undefined,
       productTitle: productTitle || undefined,
       collectionId: collectionId || undefined,
@@ -308,7 +318,7 @@ export default function InstagramPage() {
       action: "select",
       multiple: false,
       filter: {
-        variants: false,
+        variants: true,
       },
     });
 
@@ -318,11 +328,14 @@ export default function InstagramPage() {
       return;
     }
 
+    const variantId = product.variants?.[0]?.id || "";
+
     const formData = new FormData();
 
     formData.append("intent", "create-tag");
     formData.append("postId", postId);
     formData.append("productId", product.id);
+    formData.append("variantId", variantId);
     formData.append("productTitle", product.title || "");
     formData.append("productHandle", product.handle || "");
 
@@ -658,18 +671,29 @@ export default function InstagramPage() {
                         <s-heading>Manual tag fallback</s-heading>
 
                         <label>
-                          <strong>Product ID</strong>
+  <strong>Product ID</strong>
 
-                          <input
-                            type="text"
-                            name="productId"
-                            placeholder="gid://shopify/Product/..."
-                            style={fieldStyle}
-                          />
-                        </label>
+  <input
+    type="text"
+    name="productId"
+    placeholder="gid://shopify/Product/..."
+    style={fieldStyle}
+  />
+</label>
 
-                        <label>
-                          <strong>Product handle</strong>
+<label>
+  <strong>Variant ID</strong>
+
+  <input
+    type="text"
+    name="variantId"
+    placeholder="gid://shopify/ProductVariant/..."
+    style={fieldStyle}
+  />
+</label>
+
+<label>
+  <strong>Product handle</strong>
 
                           <input
                             type="text"

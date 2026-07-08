@@ -79,6 +79,7 @@ model InstagramPostTag {
   postId          String
 
   productId       String?
+  variantId       String?
   productHandle   String?
   productTitle    String?
 

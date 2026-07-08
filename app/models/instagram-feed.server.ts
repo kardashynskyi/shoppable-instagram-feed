@@ -97,6 +97,7 @@ export async function tagInstagramPost({
   shop,
   postId,
   productId,
+  variantId,
   productHandle,
   productTitle,
   collectionId,
@@ -108,6 +109,7 @@ export async function tagInstagramPost({
   shop: string;
   postId: string;
   productId?: string;
+  variantId?: string;
   productHandle?: string;
   productTitle?: string;
   collectionId?: string;
@@ -121,6 +123,7 @@ export async function tagInstagramPost({
       shop,
       postId,
       productId,
+      variantId,
       productHandle,
       productTitle,
       collectionId,
