@@ -19,6 +19,7 @@ import {
   getInstagramAccount,
   getInstagramPosts,
   tagInstagramPost,
+  syncInstagramPosts,
 } from "../models/instagram-feed.server";
 
 type ShopifyPickedVariant = {
@@ -92,6 +93,27 @@ export const action = async ({ request }: ActionFunctionArgs) => {
   const formData = await request.formData();
 
   const intent = String(formData.get("intent") || "");
+
+  if (intent === "sync-instagram") {
+  try {
+    const result = await syncInstagramPosts(session.shop);
+
+    return {
+      success: true,
+      message: `Synced ${result.syncedCount} Instagram posts.`,
+      error: null,
+    };
+  } catch (error) {
+    return {
+      success: false,
+      message: null,
+      error:
+        error instanceof Error
+          ? error.message
+          : "Instagram sync failed.",
+    };
+  }
+}
 
   if (intent === "delete-post") {
     const postId = String(formData.get("postId") || "").trim();
@@ -303,9 +325,9 @@ export default function InstagramPage() {
     background: "#ffffff",
   };
 
-  const isCreatingPost =
-    navigation.state === "submitting" &&
-    navigation.formData?.get("intent") === "create-post";
+  const isSyncing =
+  navigation.state === "submitting" &&
+  navigation.formData?.get("intent") === "sync-instagram";
 
   const handlePickProduct = async (postId: string) => {
     if (!window.shopify?.resourcePicker) {
@@ -433,73 +455,37 @@ export default function InstagramPage() {
         </s-stack>
       </s-section>
 
-      <s-section heading="Add manual post">
-        <Form method="post">
-          <input type="hidden" name="intent" value="create-post" />
+      <s-section heading="Instagram Sync">
+  <Form method="post">
+    <input
+      type="hidden"
+      name="intent"
+      value="sync-instagram"
+    />
 
-          <s-stack direction="block" gap="base">
-            <label>
-              <strong>Media URL</strong>
+    <button
+  type="submit"
+  disabled={isSyncing}
+  style={{
+    width: "fit-content",
+    padding: "10px 16px",
+    borderRadius: "8px",
+    cursor: isSyncing ? "not-allowed" : "pointer",
+    fontWeight: 600,
+  }}
+>
+  {isSyncing ? "Syncing Instagram..." : "Sync Instagram Posts"}
+</button>
+  </Form>
 
-              <input
-                type="url"
-                name="mediaUrl"
-                placeholder="https://example.com/image.jpg"
-                required
-                style={fieldStyle}
-              />
-            </label>
+  {actionData?.message && (
+    <s-paragraph>{actionData.message}</s-paragraph>
+  )}
 
-            <label>
-              <strong>Caption</strong>
-
-              <textarea
-                name="caption"
-                placeholder="Enter an Instagram caption"
-                rows={4}
-                style={{
-                  ...fieldStyle,
-                  resize: "vertical",
-                }}
-              />
-            </label>
-
-            <label>
-              <strong>Media type</strong>
-
-              <select name="mediaType" defaultValue="IMAGE" style={fieldStyle}>
-                <option value="IMAGE">Image</option>
-                <option value="VIDEO">Video</option>
-                <option value="CAROUSEL_ALBUM">Carousel</option>
-                <option value="STORY">Story</option>
-              </select>
-            </label>
-
-            {actionData?.error ? (
-              <s-paragraph>{actionData.error}</s-paragraph>
-            ) : null}
-
-            {actionData?.message ? (
-              <s-paragraph>{actionData.message}</s-paragraph>
-            ) : null}
-
-            <button
-              type="submit"
-              disabled={isCreatingPost}
-              style={{
-                width: "fit-content",
-                padding: "10px 16px",
-                border: 0,
-                borderRadius: "8px",
-                cursor: isCreatingPost ? "not-allowed" : "pointer",
-                fontWeight: 600,
-              }}
-            >
-              {isCreatingPost ? "Adding post..." : "Add manual post"}
-            </button>
-          </s-stack>
-        </Form>
-      </s-section>
+  {actionData?.error && (
+    <s-paragraph>{actionData.error}</s-paragraph>
+  )}
+</s-section>
 
       <s-section heading="Instagram posts">
         {posts.length === 0 ? (
