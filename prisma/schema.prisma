@@ -1,113 +1,146 @@
-// This is your Prisma schema file,
-// learn more about it in the docs: https://pris.ly/d/prisma-schema
+// This is your Prisma schema file.
+// Learn more: https://pris.ly/d/prisma-schema
 
 generator client {
   provider = "prisma-client-js"
 }
 
-// Note that some adapters may set a maximum length for the String type by default, please ensure your strings are long
-// enough when changing adapters.
-// See https://www.prisma.io/docs/orm/reference/prisma-schema-reference#string for more information
 datasource db {
   provider = "sqlite"
   url      = "file:dev.sqlite"
 }
 
 model Session {
-  id            String    @id
-  shop          String
-  state         String
-  isOnline      Boolean   @default(false)
-  scope         String?
-  expires       DateTime?
-  accessToken   String
-  userId        BigInt?
-  firstName     String?
-  lastName      String?
-  email         String?
-  accountOwner  Boolean   @default(false)
-  locale        String?
-  collaborator  Boolean?  @default(false)
-  emailVerified Boolean?  @default(false)
+  id                  String    @id
+  shop                String
+  state               String
+  isOnline            Boolean   @default(false)
+  scope               String?
+  expires             DateTime?
+  accessToken         String
+  userId              BigInt?
+  firstName           String?
+  lastName            String?
+  email               String?
+  accountOwner        Boolean   @default(false)
+  locale              String?
+  collaborator        Boolean?  @default(false)
+  emailVerified       Boolean?  @default(false)
   refreshToken        String?
   refreshTokenExpires DateTime?
+
+  @@index([shop])
 }
+
 model InstagramAccount {
-  id          String  @id @default(cuid())
+  id   String @id @default(cuid())
+  shop String @unique
 
-  // One connected Instagram account per Shopify store.
-  shop        String  @unique
+  // Meta asset identifiers.
+  pageId        String?
+  instagramId   String?
+  facebookUserId String?
+  username      String?
 
-  // Meta identifiers.
-  pageId      String?
-  instagramId String?
-  username    String?
-
-  // Must only be read server-side.
+  // Meta authorization.
+  //
+  // This value will be encrypted before it is written by the server code.
+  // It must never be returned to the browser or storefront API.
   accessToken String?
+
+  tokenType      String?
+  tokenIssuedAt  DateTime?
   tokenExpiresAt DateTime?
+  grantedScopes  String?
 
-  connected   Boolean @default(false)
+  // Connection lifecycle.
+  connected          Boolean   @default(false)
+  reconnectRequired  Boolean   @default(false)
+  connectedAt        DateTime?
+  disconnectedAt     DateTime?
+  lastTokenCheckedAt DateTime?
 
-  // Sync status.
-  lastSyncedAt DateTime?
-  lastSyncError String?
+  // Sync lifecycle.
+  lastSyncedAt      DateTime?
+  lastSyncError     String?
+  lastSyncErrorCode String?
+
+  // Used to prevent two sync operations from running simultaneously.
+  syncInProgress Boolean   @default(false)
+  syncStartedAt  DateTime?
 
   posts InstagramPost[]
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
+
+  @@index([pageId])
+  @@index([instagramId])
+  @@index([connected])
+  @@index([reconnectRequired])
 }
 
 model InstagramPost {
-  id             String   @id @default(cuid())
-  shop           String
-  instagramId    String?  @unique
-  accountId      String?
+  id          String  @id @default(cuid())
+  shop        String
+  instagramId String? @unique
+  accountId   String?
 
-  mediaUrl       String
-  permalink      String?
-  caption        String?
-  mediaType      String   @default("IMAGE") // IMAGE, VIDEO, CAROUSEL_ALBUM, STORY
-  thumbnailUrl   String?
-  timestamp      DateTime?
+  mediaUrl     String
+  permalink    String?
+  caption      String?
+  mediaType    String  @default("IMAGE")
+  thumbnailUrl String?
+  timestamp    DateTime?
 
-  isPublished    Boolean  @default(true)
+  isPublished Boolean @default(true)
 
-  account        InstagramAccount? @relation(fields: [accountId], references: [id], onDelete: SetNull)
-  tags           InstagramPostTag[]
+  account InstagramAccount? @relation(
+    fields: [accountId],
+    references: [id],
+    onDelete: SetNull
+  )
 
-  createdAt      DateTime @default(now())
-  updatedAt      DateTime @updatedAt
+  tags InstagramPostTag[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 
   @@index([shop])
   @@index([accountId])
+  @@index([shop, isPublished])
+  @@index([shop, timestamp])
 }
 
 model InstagramPostTag {
-  id              String   @id @default(cuid())
-  shop            String
-  postId          String
+  id     String @id @default(cuid())
+  shop   String
+  postId String
 
-  productId       String?
-  variantId       String?
-  productHandle   String?
-  productTitle    String?
+  productId     String?
+  variantId     String?
+  productHandle String?
+  productTitle  String?
 
-  collectionId    String?
+  collectionId     String?
   collectionHandle String?
   collectionTitle  String?
 
-  xPosition       Float?
-  yPosition       Float?
+  xPosition Float?
+  yPosition Float?
 
-  post            InstagramPost @relation(fields: [postId], references: [id], onDelete: Cascade)
+  post InstagramPost @relation(
+    fields: [postId],
+    references: [id],
+    onDelete: Cascade
+  )
 
-  createdAt       DateTime @default(now())
-  updatedAt       DateTime @updatedAt
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 
   @@index([shop])
   @@index([postId])
   @@index([productId])
+  @@index([variantId])
   @@index([collectionId])
 }
