@@ -33,19 +33,30 @@ model Session {
   refreshTokenExpires DateTime?
 }
 model InstagramAccount {
-  id          String   @id @default(cuid())
-  shop        String
+  id          String  @id @default(cuid())
+
+  // One connected Instagram account per Shopify store.
+  shop        String  @unique
+
+  // Meta identifiers.
+  pageId      String?
   instagramId String?
   username    String?
+
+  // Must only be read server-side.
   accessToken String?
-  connected   Boolean  @default(false)
+  tokenExpiresAt DateTime?
 
-  posts       InstagramPost[]
+  connected   Boolean @default(false)
 
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
+  // Sync status.
+  lastSyncedAt DateTime?
+  lastSyncError String?
 
-  @@index([shop])
+  posts InstagramPost[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 }
 
 model InstagramPost {
