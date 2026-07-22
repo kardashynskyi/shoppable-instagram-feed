@@ -37,10 +37,10 @@ model InstagramAccount {
   shop String @unique
 
   // Meta asset identifiers.
-  pageId        String?
-  instagramId   String?
+  pageId         String?
+  instagramId    String?
   facebookUserId String?
-  username      String?
+  username       String?
 
   // Meta authorization.
   //
@@ -89,17 +89,13 @@ model InstagramPost {
   mediaUrl     String
   permalink    String?
   caption      String?
-  mediaType    String  @default("IMAGE")
+  mediaType    String    @default("IMAGE")
   thumbnailUrl String?
   timestamp    DateTime?
 
   isPublished Boolean @default(true)
 
-  account InstagramAccount? @relation(
-    fields: [accountId],
-    references: [id],
-    onDelete: SetNull
-  )
+  account InstagramAccount? @relation(fields: [accountId], references: [id], onDelete: SetNull)
 
   tags InstagramPostTag[]
 
@@ -129,11 +125,7 @@ model InstagramPostTag {
   xPosition Float?
   yPosition Float?
 
-  post InstagramPost @relation(
-    fields: [postId],
-    references: [id],
-    onDelete: Cascade
-  )
+  post InstagramPost @relation(fields: [postId], references: [id], onDelete: Cascade)
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
