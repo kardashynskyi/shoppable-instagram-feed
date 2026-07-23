@@ -1,9 +1,7 @@
 import type {
-  HeadersFunction,
   LoaderFunctionArgs,
 } from "react-router";
-import { useRouteError } from "react-router";
-import { boundary } from "@shopify/shopify-app-react-router/server";
+import { redirect } from "react-router";
 
 import { authenticate } from "../shopify.server";
 
@@ -19,7 +17,9 @@ const META_PERMISSIONS = [
   "instagram_basic",
 ];
 
-function requireEnvironmentVariable(name: string): string {
+function requireEnvironmentVariable(
+  name: string,
+): string {
   const value = process.env[name]?.trim();
 
   if (!value) {
@@ -34,25 +34,32 @@ function requireEnvironmentVariable(name: string): string {
 export const loader = async ({
   request,
 }: LoaderFunctionArgs) => {
-  const { session, redirect } =
+  const { session } =
     await authenticate.admin(request);
 
-  const requestUrl = new URL(request.url);
+  const requestUrl =
+    new URL(request.url);
 
   const host =
-    requestUrl.searchParams.get("host")?.trim();
+    requestUrl.searchParams
+      .get("host")
+      ?.trim();
 
   if (!host) {
     throw new Error(
-      "Shopify host parameter is missing. Open the app through Shopify Admin.",
+      "Shopify host parameter is missing.",
     );
   }
 
   const metaAppId =
-    requireEnvironmentVariable("META_APP_ID");
+    requireEnvironmentVariable(
+      "META_APP_ID",
+    );
 
   const metaRedirectUri =
-    requireEnvironmentVariable("META_REDIRECT_URI");
+    requireEnvironmentVariable(
+      "META_REDIRECT_URI",
+    );
 
   const state = Buffer.from(
     JSON.stringify({
@@ -63,7 +70,8 @@ export const loader = async ({
     "utf8",
   ).toString("base64url");
 
-  const authorizationUrl = new URL(META_OAUTH_URL);
+  const authorizationUrl =
+    new URL(META_OAUTH_URL);
 
   authorizationUrl.searchParams.set(
     "client_id",
@@ -90,21 +98,11 @@ export const loader = async ({
     state,
   );
 
-  return redirect(authorizationUrl.toString(), {
-    target: "_top",
-  });
+  return redirect(
+    authorizationUrl.toString(),
+  );
 };
 
 export default function InstagramConnectRoute() {
   return null;
 }
-
-export function ErrorBoundary() {
-  return boundary.error(useRouteError());
-}
-
-export const headers: HeadersFunction = (
-  headersArgs,
-) => {
-  return boundary.headers(headersArgs);
-};
