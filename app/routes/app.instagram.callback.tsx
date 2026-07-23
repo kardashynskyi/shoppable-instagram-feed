@@ -377,11 +377,7 @@ function buildInstagramRedirect({
     );
   }
 
-  const appUrl =
-  process.env.SHOPIFY_APP_URL ||
-  "";
-
-return `${appUrl}/app/instagram?${params.toString()}`;
+  return `/app/instagram?${params.toString()}`;
 }
 
 export const loader = async ({
