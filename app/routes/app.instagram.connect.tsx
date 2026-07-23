@@ -98,9 +98,14 @@ export const loader = async ({
     state,
   );
 
-  return redirect(
-    authorizationUrl.toString(),
-  );
+  return new Response(null, {
+  status: 302,
+  headers: {
+    Location: authorizationUrl.toString(),
+    "Content-Security-Policy":
+      "frame-ancestors 'none'",
+   },
+});
 };
 
 export default function InstagramConnectRoute() {
