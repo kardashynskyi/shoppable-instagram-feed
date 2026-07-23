@@ -28,9 +28,16 @@ export const loader = async ({
   const { session } =
     await authenticate.admin(request);
 
+  console.log(
+    "APP ROUTE SESSION SHOP:",
+    session.shop,
+  );
+
   return {
-    apiKey: process.env.SHOPIFY_API_KEY || "",
-    shop: session.shop,
+    apiKey:
+      process.env.SHOPIFY_API_KEY || "",
+    shop:
+      session.shop,
   };
 };
 
