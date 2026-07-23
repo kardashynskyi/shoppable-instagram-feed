@@ -25,19 +25,11 @@ import {
 export const loader = async ({
   request,
 }: LoaderFunctionArgs) => {
-  const { session } =
-    await authenticate.admin(request);
-
-  console.log(
-    "APP ROUTE SESSION SHOP:",
-    session.shop,
-  );
+  await authenticate.admin(request);
 
   return {
     apiKey:
       process.env.SHOPIFY_API_KEY || "",
-    shop:
-      session.shop,
   };
 };
 
@@ -45,14 +37,12 @@ export const loader = async ({
 export default function App() {
   const {
     apiKey,
-    shop,
   } = useLoaderData<typeof loader>();
 
   return (
     <AppProvider
       embedded
       apiKey={apiKey}
-      shop={shop}
     >
       <s-app-nav>
         <s-link href="/app/instagram">
