@@ -17,6 +17,7 @@ const MAXIMUM_STATE_AGE_MS = 15 * 60 * 1000;
 
 type OAuthState = {
   shop: string;
+  host: string;
   createdAt: number;
 };
 
@@ -103,27 +104,31 @@ function parseOAuthState(value: string | null): OAuthState {
   }
 
   if (
-    typeof parsed !== "object" ||
-    parsed === null ||
-    !("shop" in parsed) ||
-    !("createdAt" in parsed)
-  ) {
-    throw new Error(
-      "The Meta OAuth state is invalid.",
-    );
-  }
+  typeof parsed !== "object" ||
+  parsed === null ||
+  !("shop" in parsed) ||
+  !("host" in parsed) ||
+  !("createdAt" in parsed)
+) {
+  throw new Error(
+    "The Meta OAuth state is invalid.",
+  );
+}
 
   const shop = String(parsed.shop || "")
-    .trim()
-    .toLowerCase();
+  .trim()
+  .toLowerCase();
 
-  const createdAt = Number(parsed.createdAt);
+const host = String(parsed.host || "").trim();
+
+const createdAt = Number(parsed.createdAt);
 
   if (
-    !shop ||
-    !shop.endsWith(".myshopify.com") ||
-    !Number.isFinite(createdAt)
-  ) {
+  !shop ||
+  !shop.endsWith(".myshopify.com") ||
+  !host ||
+  !Number.isFinite(createdAt)
+) {
     throw new Error(
       "The Meta OAuth state is invalid.",
     );
@@ -139,9 +144,10 @@ function parseOAuthState(value: string | null): OAuthState {
   }
 
   return {
-    shop,
-    createdAt,
-  };
+  shop,
+  host,
+  createdAt,
+};
 }
 
 async function fetchMetaJson<T>(
@@ -306,18 +312,31 @@ function selectInstagramPage(
 }
 
 function buildInstagramRedirect({
+  state,
   success,
   message,
 }: {
+  state: OAuthState;
   success: boolean;
   message?: string;
 }) {
-  const params = new URLSearchParams();
+  const params = new URLSearchParams({
+    shop: state.shop,
+    host: state.host,
+    embedded: "1",
+  });
 
   if (success) {
-    params.set("instagramConnection", "success");
+    params.set(
+      "instagramConnection",
+      "success",
+    );
   } else {
-    params.set("instagramConnection", "error");
+    params.set(
+      "instagramConnection",
+      "error",
+    );
+
     params.set(
       "instagramError",
       message || "Instagram connection failed.",
@@ -351,9 +370,9 @@ export const loader = async ({
   } catch (error) {
     return redirect(
       buildInstagramRedirect({
-        success: false,
-        message: getErrorMessage(error),
-      }),
+  success: false,
+  message: getErrorMessage(error),
+})
     );
   }
 
@@ -485,8 +504,9 @@ export const loader = async ({
 
     return redirect(
       buildInstagramRedirect({
-        success: true,
-      }),
+  state,
+  success: true,
+})
     );
   } catch (error) {
     console.error(
@@ -496,9 +516,9 @@ export const loader = async ({
 
     return redirect(
       buildInstagramRedirect({
-        success: false,
-        message: getErrorMessage(error),
-      }),
+  success: false,
+  message: getErrorMessage(error),
+})
     );
   }
 };

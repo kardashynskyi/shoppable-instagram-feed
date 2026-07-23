@@ -1,5 +1,9 @@
-import type { LoaderFunctionArgs } from "react-router";
-import { redirect } from "react-router";
+import type {
+  HeadersFunction,
+  LoaderFunctionArgs,
+} from "react-router";
+import { useRouteError } from "react-router";
+import { boundary } from "@shopify/shopify-app-react-router/server";
 
 import { authenticate } from "../shopify.server";
 
@@ -30,7 +34,19 @@ function requireEnvironmentVariable(name: string): string {
 export const loader = async ({
   request,
 }: LoaderFunctionArgs) => {
-  const { session } = await authenticate.admin(request);
+  const { session, redirect } =
+    await authenticate.admin(request);
+
+  const requestUrl = new URL(request.url);
+
+  const host =
+    requestUrl.searchParams.get("host")?.trim();
+
+  if (!host) {
+    throw new Error(
+      "Shopify host parameter is missing. Open the app through Shopify Admin.",
+    );
+  }
 
   const metaAppId =
     requireEnvironmentVariable("META_APP_ID");
@@ -38,16 +54,10 @@ export const loader = async ({
   const metaRedirectUri =
     requireEnvironmentVariable("META_REDIRECT_URI");
 
-  /*
-   * The state value lets the callback identify which Shopify
-   * store initiated the Meta authorization request.
-   *
-   * We will replace this with a signed, expiring state value
-   * when we create the callback route.
-   */
   const state = Buffer.from(
     JSON.stringify({
       shop: session.shop,
+      host,
       createdAt: Date.now(),
     }),
     "utf8",
@@ -80,9 +90,21 @@ export const loader = async ({
     state,
   );
 
-  return redirect(authorizationUrl.toString());
+  return redirect(authorizationUrl.toString(), {
+    target: "_top",
+  });
 };
 
 export default function InstagramConnectRoute() {
   return null;
 }
+
+export function ErrorBoundary() {
+  return boundary.error(useRouteError());
+}
+
+export const headers: HeadersFunction = (
+  headersArgs,
+) => {
+  return boundary.headers(headersArgs);
+};
