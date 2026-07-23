@@ -45,6 +45,10 @@ export default function App() {
       apiKey={apiKey}
     >
       <s-app-nav>
+        <s-link href="/app">
+          Home
+        </s-link>
+
         <s-link href="/app/instagram">
           Instagram Feed
         </s-link>
@@ -57,12 +61,16 @@ export default function App() {
 
 
 export function ErrorBoundary() {
-  return boundary.error(useRouteError());
+  return boundary.error(
+    useRouteError(),
+  );
 }
 
 
 export const headers: HeadersFunction = (
   headersArgs,
 ) => {
-  return boundary.headers(headersArgs);
+  return boundary.headers(
+    headersArgs,
+  );
 };
