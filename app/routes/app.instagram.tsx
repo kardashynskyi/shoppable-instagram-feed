@@ -376,7 +376,7 @@ export default function InstagramPage() {
 
   const location = useLocation();
 
-const connectInstagramUrl =
+  const connectInstagramUrl =
   `/app/instagram/connect${location.search}`;
 
   const isSubmitting =
