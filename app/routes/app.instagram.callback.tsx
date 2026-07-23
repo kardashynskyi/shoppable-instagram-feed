@@ -2,7 +2,10 @@ import type {
   HeadersFunction,
   LoaderFunctionArgs,
 } from "react-router";
-import { redirect } from "react-router";
+import {
+  redirect,
+  useRouteError,
+} from "react-router";
 import { boundary } from "@shopify/shopify-app-react-router/server";
 
 import { upsertInstagramAccount } from "../models/instagram-feed.server";
@@ -13,7 +16,14 @@ const META_GRAPH_API_VERSION =
 const META_GRAPH_API_BASE =
   `https://graph.facebook.com/${META_GRAPH_API_VERSION}`;
 
-const MAXIMUM_STATE_AGE_MS = 15 * 60 * 1000;
+const MAXIMUM_STATE_AGE_MS =
+  15 * 60 * 1000;
+
+const META_PERMISSIONS = [
+  "pages_show_list",
+  "pages_read_engagement",
+  "instagram_basic",
+];
 
 type OAuthState = {
   shop: string;
@@ -61,7 +71,9 @@ type MetaPagesResponse = {
   error?: MetaError;
 };
 
-function requireEnvironmentVariable(name: string): string {
+function requireEnvironmentVariable(
+  name: string,
+): string {
   const value = process.env[name]?.trim();
 
   if (!value) {
@@ -73,7 +85,9 @@ function requireEnvironmentVariable(name: string): string {
   return value;
 }
 
-function getErrorMessage(error: unknown): string {
+function getErrorMessage(
+  error: unknown,
+): string {
   if (error instanceof Error) {
     return error.message;
   }
@@ -81,7 +95,9 @@ function getErrorMessage(error: unknown): string {
   return "Instagram connection failed.";
 }
 
-function parseOAuthState(value: string | null): OAuthState {
+function parseOAuthState(
+  value: string | null,
+): OAuthState {
   if (!value) {
     throw new Error(
       "The Meta OAuth state parameter is missing.",
@@ -104,39 +120,48 @@ function parseOAuthState(value: string | null): OAuthState {
   }
 
   if (
-  typeof parsed !== "object" ||
-  parsed === null ||
-  !("shop" in parsed) ||
-  !("host" in parsed) ||
-  !("createdAt" in parsed)
-) {
-  throw new Error(
-    "The Meta OAuth state is invalid.",
-  );
-}
-
-  const shop = String(parsed.shop || "")
-  .trim()
-  .toLowerCase();
-
-const host = String(parsed.host || "").trim();
-
-const createdAt = Number(parsed.createdAt);
-
-  if (
-  !shop ||
-  !shop.endsWith(".myshopify.com") ||
-  !host ||
-  !Number.isFinite(createdAt)
-) {
+    typeof parsed !== "object" ||
+    parsed === null ||
+    !("shop" in parsed) ||
+    !("host" in parsed) ||
+    !("createdAt" in parsed)
+  ) {
     throw new Error(
       "The Meta OAuth state is invalid.",
     );
   }
 
+  const shop = String(
+    parsed.shop || "",
+  )
+    .trim()
+    .toLowerCase();
+
+  const host = String(
+    parsed.host || "",
+  ).trim();
+
+  const createdAt = Number(
+    parsed.createdAt,
+  );
+
   if (
-    createdAt > Date.now() ||
-    Date.now() - createdAt > MAXIMUM_STATE_AGE_MS
+    !shop ||
+    !shop.endsWith(".myshopify.com") ||
+    !host ||
+    !Number.isFinite(createdAt)
+  ) {
+    throw new Error(
+      "The Meta OAuth state is invalid.",
+    );
+  }
+
+  const currentTime = Date.now();
+
+  if (
+    createdAt > currentTime ||
+    currentTime - createdAt >
+      MAXIMUM_STATE_AGE_MS
   ) {
     throw new Error(
       "The Meta OAuth request has expired. Start the connection again.",
@@ -144,10 +169,10 @@ const createdAt = Number(parsed.createdAt);
   }
 
   return {
-  shop,
-  host,
-  createdAt,
-};
+    shop,
+    host,
+    createdAt,
+  };
 }
 
 async function fetchMetaJson<T>(
@@ -194,7 +219,7 @@ async function exchangeAuthorizationCode({
   appId: string;
   appSecret: string;
   redirectUri: string;
-}) {
+}): Promise<MetaTokenResponse> {
   const params = new URLSearchParams({
     client_id: appId,
     client_secret: appSecret,
@@ -215,7 +240,7 @@ async function exchangeLongLivedToken({
   shortLivedToken: string;
   appId: string;
   appSecret: string;
-}) {
+}): Promise<MetaTokenResponse> {
   const params = new URLSearchParams({
     grant_type: "fb_exchange_token",
     client_id: appId,
@@ -236,9 +261,10 @@ async function getFacebookUserId(
     access_token: accessToken,
   });
 
-  const result = await fetchMetaJson<MetaUserResponse>(
-    `${META_GRAPH_API_BASE}/me?${params.toString()}`,
-  );
+  const result =
+    await fetchMetaJson<MetaUserResponse>(
+      `${META_GRAPH_API_BASE}/me?${params.toString()}`,
+    );
 
   return result.id;
 }
@@ -261,7 +287,9 @@ async function getFacebookPages(
 
   while (nextUrl) {
     const result =
-      await fetchMetaJson<MetaPagesResponse>(nextUrl);
+      await fetchMetaJson<MetaPagesResponse>(
+        nextUrl,
+      );
 
     pages.push(...(result.data ?? []));
     nextUrl = result.paging?.next;
@@ -277,7 +305,9 @@ function selectInstagramPage(
     (page) =>
       Boolean(page.id) &&
       Boolean(page.access_token) &&
-      Boolean(page.instagram_business_account?.id),
+      Boolean(
+        page.instagram_business_account?.id,
+      ),
   );
 
   if (connectedPages.length === 0) {
@@ -289,14 +319,17 @@ function selectInstagramPage(
   }
 
   const preferredInstagramId =
-    process.env.META_PREFERRED_INSTAGRAM_ACCOUNT_ID?.trim();
+    process.env
+      .META_PREFERRED_INSTAGRAM_ACCOUNT_ID
+      ?.trim();
 
   if (preferredInstagramId) {
-    const preferredPage = connectedPages.find(
-      (page) =>
-        page.instagram_business_account?.id ===
-        preferredInstagramId,
-    );
+    const preferredPage =
+      connectedPages.find(
+        (page) =>
+          page.instagram_business_account
+            ?.id === preferredInstagramId,
+      );
 
     if (!preferredPage) {
       throw new Error(
@@ -319,7 +352,7 @@ function buildInstagramRedirect({
   state: OAuthState;
   success: boolean;
   message?: string;
-}) {
+}): string {
   const params = new URLSearchParams({
     shop: state.shop,
     host: state.host,
@@ -339,11 +372,16 @@ function buildInstagramRedirect({
 
     params.set(
       "instagramError",
-      message || "Instagram connection failed.",
+      message ||
+        "Instagram connection failed.",
     );
   }
 
-  return `/app/instagram?${params.toString()}`;
+  const appUrl =
+  process.env.SHOPIFY_APP_URL ||
+  "";
+
+return `${appUrl}/app/instagram?${params.toString()}`;
 }
 
 export const loader = async ({
@@ -351,7 +389,9 @@ export const loader = async ({
 }: LoaderFunctionArgs) => {
   const requestUrl = new URL(request.url);
 
-  const code = requestUrl.searchParams.get("code");
+  const code =
+    requestUrl.searchParams.get("code");
+
   const stateValue =
     requestUrl.searchParams.get("state");
 
@@ -368,17 +408,27 @@ export const loader = async ({
   try {
     state = parseOAuthState(stateValue);
   } catch (error) {
-    return redirect(
-      buildInstagramRedirect({
-  success: false,
-  message: getErrorMessage(error),
-})
+    console.error(
+      "Invalid Instagram OAuth state:",
+      error,
+    );
+
+    return new Response(
+      getErrorMessage(error),
+      {
+        status: 400,
+        headers: {
+          "Content-Type":
+            "text/plain; charset=utf-8",
+        },
+      },
     );
   }
 
   if (metaError) {
     return redirect(
       buildInstagramRedirect({
+        state,
         success: false,
         message:
           metaErrorDescription ||
@@ -390,6 +440,7 @@ export const loader = async ({
   if (!code) {
     return redirect(
       buildInstagramRedirect({
+        state,
         success: false,
         message:
           "Meta did not return an authorization code.",
@@ -399,13 +450,19 @@ export const loader = async ({
 
   try {
     const metaAppId =
-      requireEnvironmentVariable("META_APP_ID");
+      requireEnvironmentVariable(
+        "META_APP_ID",
+      );
 
     const metaAppSecret =
-      requireEnvironmentVariable("META_APP_SECRET");
+      requireEnvironmentVariable(
+        "META_APP_SECRET",
+      );
 
     const metaRedirectUri =
-      requireEnvironmentVariable("META_REDIRECT_URI");
+      requireEnvironmentVariable(
+        "META_REDIRECT_URI",
+      );
 
     const shortLivedTokenResponse =
       await exchangeAuthorizationCode({
@@ -415,7 +472,10 @@ export const loader = async ({
         redirectUri: metaRedirectUri,
       });
 
-    if (!shortLivedTokenResponse.access_token) {
+    const shortLivedAccessToken =
+      shortLivedTokenResponse.access_token;
+
+    if (!shortLivedAccessToken) {
       throw new Error(
         "Meta did not return an access token.",
       );
@@ -424,20 +484,14 @@ export const loader = async ({
     const longLivedTokenResponse =
       await exchangeLongLivedToken({
         shortLivedToken:
-          shortLivedTokenResponse.access_token,
+          shortLivedAccessToken,
         appId: metaAppId,
         appSecret: metaAppSecret,
       });
 
     const facebookUserAccessToken =
       longLivedTokenResponse.access_token ||
-      shortLivedTokenResponse.access_token;
-
-    if (!facebookUserAccessToken) {
-      throw new Error(
-        "Meta did not return a usable access token.",
-      );
-    }
+      shortLivedAccessToken;
 
     const [facebookUserId, pages] =
       await Promise.all([
@@ -474,6 +528,7 @@ export const loader = async ({
 
     const tokenExpiresAt =
       typeof expiresInSeconds === "number" &&
+      Number.isFinite(expiresInSeconds) &&
       expiresInSeconds > 0
         ? new Date(
             issuedAt.getTime() +
@@ -484,29 +539,31 @@ export const loader = async ({
     await upsertInstagramAccount({
       shop: state.shop,
       pageId: selectedPage.id,
-      instagramId: instagramAccount.id,
+      instagramId:
+        instagramAccount.id,
       facebookUserId,
-      username: instagramAccount.username,
-      accessToken: selectedPage.access_token,
+      username:
+        instagramAccount.username,
+      accessToken:
+        selectedPage.access_token,
       tokenType:
-        longLivedTokenResponse.token_type ||
-        shortLivedTokenResponse.token_type ||
+        longLivedTokenResponse
+          .token_type ||
+        shortLivedTokenResponse
+          .token_type ||
         "bearer",
       tokenIssuedAt: issuedAt,
       tokenExpiresAt,
-      grantedScopes: [
-        "pages_show_list",
-        "pages_read_engagement",
-        "instagram_basic",
-      ].join(","),
+      grantedScopes:
+        META_PERMISSIONS.join(","),
       connected: true,
     });
 
     return redirect(
       buildInstagramRedirect({
-  state,
-  success: true,
-})
+        state,
+        success: true,
+      }),
     );
   } catch (error) {
     console.error(
@@ -516,9 +573,11 @@ export const loader = async ({
 
     return redirect(
       buildInstagramRedirect({
-  success: false,
-  message: getErrorMessage(error),
-})
+        state,
+        success: false,
+        message:
+          getErrorMessage(error),
+      }),
     );
   }
 };
@@ -527,8 +586,16 @@ export default function InstagramCallbackRoute() {
   return null;
 }
 
+export function ErrorBoundary() {
+  return boundary.error(
+    useRouteError(),
+  );
+}
+
 export const headers: HeadersFunction = (
   headersArgs,
 ) => {
-  return boundary.headers(headersArgs);
+  return boundary.headers(
+    headersArgs,
+  );
 };
