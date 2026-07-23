@@ -7,6 +7,7 @@ import {
   Form,
   useActionData,
   useLoaderData,
+  useLocation,
   useNavigation,
   useSubmit,
 } from "react-router";
@@ -373,6 +374,11 @@ export default function InstagramPage() {
   const navigation = useNavigation();
   const submit = useSubmit();
 
+  const location = useLocation();
+
+const connectInstagramUrl =
+  `/app/instagram/connect${location.search}`;
+
   const isSubmitting =
     navigation.state === "submitting";
 
@@ -607,7 +613,7 @@ export default function InstagramPage() {
               </s-paragraph>
 
               <a
-                href="/app/instagram/connect"
+                href={connectInstagramUrl}
                 target="_top"
                 rel="noreferrer"
                 style={primaryButtonStyle}
@@ -631,7 +637,7 @@ export default function InstagramPage() {
               ) : null}
 
               <a
-                href="/app/instagram/connect"
+                href={connectInstagramUrl}
                 target="_top"
                 rel="noreferrer"
                 style={primaryButtonStyle}
@@ -689,7 +695,7 @@ export default function InstagramPage() {
               </s-paragraph>
 
               <a
-                href="/app/instagram/connect"
+                href={connectInstagramUrl}
                 target="_top"
                 rel="noreferrer"
                 style={primaryButtonStyle}
