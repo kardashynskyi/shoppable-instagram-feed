@@ -93,19 +93,17 @@ export const loader = async ({
     META_PERMISSIONS.join(","),
   );
 
-  authorizationUrl.searchParams.set(
+    authorizationUrl.searchParams.set(
     "state",
     state,
   );
 
-  return new Response(null, {
-  status: 302,
-  headers: {
-    Location: authorizationUrl.toString(),
-    "Content-Security-Policy":
-      "frame-ancestors 'none'",
-   },
-});
+  return redirect(
+    authorizationUrl.toString(),
+    {
+      target: "_top",
+    },
+  );
 };
 
 export default function InstagramConnectRoute() {
