@@ -37,19 +37,11 @@ export const loader = async ({
   const { session } =
     await authenticate.admin(request);
 
-  const requestUrl =
-    new URL(request.url);
+  const requestUrl = new URL(request.url);
 
-  const host =
-    requestUrl.searchParams
-      .get("host")
-      ?.trim();
-
-  if (!host) {
-    throw new Error(
-      "Shopify host parameter is missing.",
-    );
-  }
+const host =
+  requestUrl.searchParams.get("host") ||
+  "";
 
   const metaAppId =
     requireEnvironmentVariable(
@@ -99,11 +91,8 @@ export const loader = async ({
   );
 
   return redirect(
-    authorizationUrl.toString(),
-    {
-      target: "_top",
-    },
-  );
+  authorizationUrl.toString(),
+);
 };
 
 export default function InstagramConnectRoute() {

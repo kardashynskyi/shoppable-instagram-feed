@@ -377,7 +377,7 @@ function buildInstagramRedirect({
     );
   }
 
-  return `/app/instagram?${params.toString()}`;
+  return `/app/instagram?${params.toString()}&shop=${state.shop}`;
 }
 
 export const loader = async ({
@@ -555,26 +555,31 @@ export const loader = async ({
       connected: true,
     });
 
-    return redirect(
-      buildInstagramRedirect({
-        state,
-        success: true,
-      }),
-    );
-  } catch (error) {
+    return new Response(null, {
+  status: 302,
+  headers: {
+    Location: buildInstagramRedirect({
+      state,
+      success: true,
+    }),
+  },
+});
+    } catch (error) {
     console.error(
       "Instagram OAuth callback failed:",
       error,
     );
 
-    return redirect(
-      buildInstagramRedirect({
-        state,
-        success: false,
-        message:
-          getErrorMessage(error),
-      }),
-    );
+    return new Response(null, {
+      status: 302,
+      headers: {
+        Location: buildInstagramRedirect({
+          state,
+          success: false,
+          message: getErrorMessage(error),
+        }),
+      },
+    });
   }
 };
 

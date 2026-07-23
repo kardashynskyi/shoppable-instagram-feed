@@ -1,0 +1,32 @@
+[33m38d8e51[m[33m ([m[1;36mHEAD[m[33m -> [m[1;32mmain[m[33m, [m[1;31morigin/main[m[33m)[m Preserve Shopify context after Meta OAuth
+[33m2b0f335[m Preserve Shopify context for Meta connection
+[33m99c1756[m Add Meta Instagram OAuth callback
+[33mfddc579[m Preserve Shopify context for Instagram OAuth
+[33mad7ee85[m Add Meta Instagram connect route
+[33m09ac39c[m Add Instagram connection states
+[33m3700d0f[m Add Meta OAuth lifecycle fields
+[33mb73b28c[m Use per-store Meta credentials for Instagram sync
+[33mc2aad89[m Add Meta OAuth token lifecycle
+[33m5c61da2[m Add Instagram post sync UI and logic
+[33med4e399[m Add Instagram sync account fields
+[33m5f3f802[m Expose variant IDs in storefront feed API
+[33mcf7fb14[m Add variant ID support for Instagram post tags
+[33mc4d61a0[m Fix admin form field borders
+[33mc5e01fc[m Add CORS headers to storefront feed API
+[33mb933996[m Render storefront Instagram feed block
+[33mc6283e0[m Render storefront Instagram feed block
+[33maa610ef[m Fix storefront feed API response
+[33m5dd51e7[m Add storefront Instagram feed API
+[33m31235cf[m Add Shopify collection picker tagging
+[33mb42ba54[m Add Shopify product picker tagging
+[33m4454c32[m Add manual product and collection tagging
+[33me7845d0[m Add Instagram post image previews
+[33m374e08e[m Add manual post validation and deletion
+[33m09b4797[m Add manual Instagram post creation
+[33ma1d89ea[m Add Instagram feed admin page
+[33me3ba191[m Add Instagram feed data access helpers
+[33m6fdc226[m Add Instagram feed data models
+[33m9468f17[m Replace Shopify starter homepage
+[33mbe908a3[m Fix all Shopify app URLs
+[33m428be4c[m Configure production app URL
+[33m34feddc[m Initial shoppable Instagram feed app
