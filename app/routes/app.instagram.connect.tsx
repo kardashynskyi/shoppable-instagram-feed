@@ -14,6 +14,7 @@ const META_OAUTH_URL =
 const META_PERMISSIONS = [
   "pages_show_list",
   "pages_read_engagement",
+  "pages_manage_metadata",
   "instagram_basic",
 ];
 

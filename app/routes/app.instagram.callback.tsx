@@ -449,6 +449,11 @@ export const loader = async ({
         ),
       ]);
 
+      console.log(
+  "META PAGES RESPONSE:",
+  JSON.stringify(pages, null, 2),
+);
+
     const selectedPage =
       selectInstagramPage(pages);
 
