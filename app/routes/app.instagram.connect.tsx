@@ -85,6 +85,11 @@ const host =
     META_PERMISSIONS.join(","),
   );
 
+  authorizationUrl.searchParams.set(
+  "config_id",
+  "2256394061811521",
+);
+
     authorizationUrl.searchParams.set(
     "state",
     state,
