@@ -11,27 +11,13 @@ export const loader = async ({
 }: LoaderFunctionArgs) => {
   const url = new URL(request.url);
 
-  const params = new URLSearchParams();
-
-  const shop = url.searchParams.get("shop");
-  const host = url.searchParams.get("host");
-  const embedded = url.searchParams.get("embedded");
-
-  if (shop) {
-    params.set("shop", shop);
+  if (url.searchParams.get("shop")) {
+    return redirect(
+      `/app?${url.searchParams.toString()}`
+    );
   }
 
-  if (host) {
-    params.set("host", host);
-  }
-
-  if (embedded) {
-    params.set("embedded", embedded);
-  }
-
-  return redirect(
-    `/app?${params.toString()}`,
-  );
+  return redirect("/auth/login");
 };
 
 export default function Index() {
