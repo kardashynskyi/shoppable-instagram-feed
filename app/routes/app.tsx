@@ -28,8 +28,7 @@ export const loader = async ({
   await authenticate.admin(request);
 
   return {
-    apiKey:
-      process.env.SHOPIFY_API_KEY || "",
+    apiKey: process.env.SHOPIFY_API_KEY || "",
   };
 };
 
@@ -44,16 +43,6 @@ export default function App() {
       embedded
       apiKey={apiKey}
     >
-      <s-app-nav>
-        <s-link href="/app">
-          Home
-        </s-link>
-
-        <s-link href="/app/instagram">
-          Instagram Feed
-        </s-link>
-      </s-app-nav>
-
       <Outlet />
     </AppProvider>
   );
