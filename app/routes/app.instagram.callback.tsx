@@ -343,10 +343,7 @@ function buildInstagramRedirect({
     );
   }
 
-  return `https://admin.shopify.com/store/${state.shop.replace(
-  ".myshopify.com",
-  "",
-)}/apps/${process.env.SHOPIFY_API_KEY}/app/instagram?${params.toString()}`;
+  return `/app/instagram?${params.toString()}`;
 }
 
 export const loader = async ({
