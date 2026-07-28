@@ -8,7 +8,6 @@ import {
   Form,
   useActionData,
   useLoaderData,
-  useLocation,
   useNavigation,
   useSubmit,
 } from "react-router";
@@ -26,6 +25,94 @@ import {
 } from "../models/instagram-feed.server";
 
 import { authenticate } from "../shopify.server";
+
+
+const META_GRAPH_API_VERSION =
+  process.env.META_GRAPH_API_VERSION || "v25.0";
+
+const META_OAUTH_URL =
+  `https://www.facebook.com/${META_GRAPH_API_VERSION}/dialog/oauth`;
+
+const META_PERMISSIONS = [
+  "pages_show_list",
+  "pages_read_engagement",
+  "instagram_basic",
+];
+
+
+function requireEnvironmentVariable(
+  name: string,
+): string {
+  const value =
+    process.env[name]?.trim();
+
+  if (!value) {
+    throw new Error(
+      `${name} is missing from the server environment.`,
+    );
+  }
+
+  return value;
+}
+
+
+function buildMetaAuthorizationUrl({
+  shop,
+  host,
+}: {
+  shop: string;
+  host: string;
+}): string {
+  const metaAppId =
+    requireEnvironmentVariable(
+      "META_APP_ID",
+    );
+
+  const metaRedirectUri =
+    requireEnvironmentVariable(
+      "META_REDIRECT_URI",
+    );
+
+  const state =
+    Buffer.from(
+      JSON.stringify({
+        shop,
+        host,
+        createdAt: Date.now(),
+      }),
+      "utf8",
+    ).toString("base64url");
+
+  const authorizationUrl =
+    new URL(META_OAUTH_URL);
+
+  authorizationUrl.searchParams.set(
+    "client_id",
+    metaAppId,
+  );
+
+  authorizationUrl.searchParams.set(
+    "redirect_uri",
+    metaRedirectUri,
+  );
+
+  authorizationUrl.searchParams.set(
+    "response_type",
+    "code",
+  );
+
+  authorizationUrl.searchParams.set(
+    "scope",
+    META_PERMISSIONS.join(","),
+  );
+
+  authorizationUrl.searchParams.set(
+    "state",
+    state,
+  );
+
+  return authorizationUrl.toString();
+}
 
 
 type ShopifyPickedVariant = {
@@ -78,6 +165,34 @@ export const loader = async ({
     await authenticate.admin(request);
 
 
+  const requestUrl =
+    new URL(request.url);
+
+
+  const host =
+    requestUrl.searchParams.get(
+      "host",
+    ) || "";
+
+
+  if (!host) {
+    throw new Response(
+      "The Shopify host parameter is missing.",
+      {
+        status: 400,
+      },
+    );
+  }
+
+
+  const connectInstagramUrl =
+    buildMetaAuthorizationUrl({
+      shop:
+        session.shop,
+      host,
+    });
+
+
   const [
     account,
     posts,
@@ -95,6 +210,8 @@ export const loader = async ({
 
 
   return {
+    connectInstagramUrl,
+
     account: account
       ? {
           id: account.id,
@@ -515,6 +632,7 @@ export const action = async ({
 export default function InstagramPage() {
 
   const {
+    connectInstagramUrl,
     account,
     posts,
     stats,
@@ -532,14 +650,6 @@ export default function InstagramPage() {
 
   const submit =
     useSubmit();
-
-
-  const location =
-    useLocation();
-
-
-  const connectInstagramUrl =
-    `/app/instagram/connect${location.search}`;
 
 
   const isSubmitting =
