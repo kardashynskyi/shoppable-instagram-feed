@@ -23,6 +23,16 @@
   </div>
 
   <div class="sig-feed__carousel">
+    <button
+      type="button"
+      class="sig-feed__floating-arrow sig-feed__floating-arrow--previous"
+      aria-label="Show previous Instagram posts"
+      hidden
+      data-sig-floating-previous
+    >
+      <span aria-hidden="true">←</span>
+    </button>
+
     <div
       class="sig-feed__viewport"
       data-sig-viewport
@@ -62,6 +72,9 @@
 
     const track = section.querySelector("[data-sig-track]");
     const viewport = section.querySelector("[data-sig-viewport]");
+    const floatingPreviousButton = section.querySelector(
+      "[data-sig-floating-previous]"
+    );
     const floatingNextButton = section.querySelector(
       "[data-sig-floating-next]"
     );
@@ -191,15 +204,29 @@
 
 
     const updateButtonStates = () => {
+      const hasOverflow =
+        posts.length > getVisibleCount();
+
+      const isAtStart =
+        currentIndex <= 0;
+
       const isAtEnd =
         currentIndex >= getMaximumIndex();
+
+      if (floatingPreviousButton) {
+        floatingPreviousButton.disabled =
+          isAtStart;
+
+        floatingPreviousButton.hidden =
+          !hasOverflow || isAtStart;
+      }
 
       if (floatingNextButton) {
         floatingNextButton.disabled =
           isAtEnd;
 
         floatingNextButton.hidden =
-          posts.length <= getVisibleCount();
+          !hasOverflow || isAtEnd;
       }
     };
 
@@ -247,6 +274,20 @@
     };
 
 
+
+    const movePrevious = () => {
+      currentIndex =
+        Math.max(
+          0,
+          currentIndex -
+            Math.max(
+              1,
+              getVisibleCount() - 1
+            )
+        );
+
+      updateCarousel();
+    };
 
     const moveNext = () => {
       currentIndex =
@@ -305,7 +346,9 @@
       const linkAttributes =
         href === "#"
           ? 'aria-disabled="true" tabindex="-1"'
-          : 'target="_self"';
+          : hasTag
+            ? 'target="_self"'
+            : 'target="_blank" rel="noopener noreferrer"';
 
       const media =
         post.mediaType === "VIDEO"
@@ -392,10 +435,19 @@
         </p>
       `;
 
+      if (floatingPreviousButton) {
+        floatingPreviousButton.hidden = true;
+      }
+
       if (floatingNextButton) {
         floatingNextButton.hidden = true;
       }
     };
+
+    floatingPreviousButton?.addEventListener(
+      "click",
+      movePrevious
+    );
 
     floatingNextButton?.addEventListener(
       "click",
@@ -405,6 +457,10 @@
     section.addEventListener(
       "keydown",
       (event) => {
+        if (event.key === "ArrowLeft") {
+          movePrevious();
+        }
+
         if (event.key === "ArrowRight") {
           moveNext();
         }
@@ -810,12 +866,21 @@
   .sig-feed__floating-arrow {
     position: absolute;
     top: 50%;
-    right: -22px;
     z-index: 6;
     width: 54px;
     height: 54px;
     transform:
       translateY(-50%);
+  }
+
+  .sig-feed__floating-arrow--previous {
+    left: -22px;
+  }
+
+  .sig-feed__floating-arrow:not(
+    .sig-feed__floating-arrow--previous
+  ) {
+    right: -22px;
   }
 
   .sig-feed__floating-arrow:hover {
