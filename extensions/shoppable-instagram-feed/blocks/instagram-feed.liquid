@@ -30,7 +30,14 @@
       hidden
       data-sig-floating-previous
     >
-      <span aria-hidden="true">←</span>
+      <svg
+        class="sig-feed__chevron"
+        viewBox="0 0 24 24"
+        aria-hidden="true"
+        focusable="false"
+      >
+        <path d="M14.5 5.5 8 12l6.5 6.5" />
+      </svg>
     </button>
 
     <div
@@ -56,7 +63,14 @@
       hidden
       data-sig-floating-next
     >
-      <span aria-hidden="true">→</span>
+      <svg
+        class="sig-feed__chevron"
+        viewBox="0 0 24 24"
+        aria-hidden="true"
+        focusable="false"
+      >
+        <path d="m9.5 5.5 6.5 6.5-6.5 6.5" />
+      </svg>
     </button>
   </div>
 </div>
@@ -861,6 +875,22 @@
   .sig-feed__bag-icon {
     font-size: 13px;
     line-height: 1;
+  }
+
+  .sig-feed__chevron {
+    width: 22px;
+    height: 22px;
+    fill: none;
+    stroke: currentColor;
+    stroke-width: 1.8;
+    stroke-linecap: round;
+    stroke-linejoin: round;
+    transition: transform 180ms ease;
+  }
+
+  .sig-feed__floating-arrow:hover
+  .sig-feed__chevron {
+    transform: scale(1.08);
   }
 
   .sig-feed__floating-arrow {
