@@ -3,10 +3,11 @@
   data-sig-feed
   data-shop="{{ shop.permanent_domain | escape }}"
   data-limit="{{ block.settings.limit }}"
+  data-columns="{{ block.settings.columns }}"
   data-api-url="https://shoppable-instagram-feed.onrender.com/api/instagram-feed"
 >
   <div class="sig-feed__header">
-    <div>
+    <div class="sig-feed__heading-group">
       {% if block.settings.eyebrow != blank %}
         <p class="sig-feed__eyebrow">
           {{ block.settings.eyebrow | escape }}
@@ -19,16 +20,66 @@
         </h2>
       {% endif %}
     </div>
+
+    <div
+      class="sig-feed__controls"
+      hidden
+      data-sig-controls
+    >
+      <p
+        class="sig-feed__counter"
+        aria-live="polite"
+        data-sig-counter
+      >
+        1 / 1
+      </p>
+
+      <button
+        type="button"
+        class="sig-feed__arrow sig-feed__arrow--previous"
+        aria-label="Show previous Instagram posts"
+        data-sig-previous
+      >
+        <span aria-hidden="true">←</span>
+      </button>
+
+      <button
+        type="button"
+        class="sig-feed__arrow sig-feed__arrow--next"
+        aria-label="Show more Instagram posts"
+        data-sig-next
+      >
+        <span aria-hidden="true">→</span>
+      </button>
+    </div>
   </div>
 
-  <div
-    class="sig-feed__grid"
-    id="sig-feed-{{ block.id }}"
-    aria-live="polite"
-  >
-    <p class="sig-feed__message">
-      Loading Instagram feed...
-    </p>
+  <div class="sig-feed__carousel">
+    <div
+      class="sig-feed__viewport"
+      data-sig-viewport
+    >
+      <div
+        class="sig-feed__track"
+        id="sig-feed-{{ block.id }}"
+        aria-live="polite"
+        data-sig-track
+      >
+        <p class="sig-feed__message">
+          Loading Instagram feed...
+        </p>
+      </div>
+    </div>
+
+    <button
+      type="button"
+      class="sig-feed__floating-arrow"
+      aria-label="Show more Instagram posts"
+      hidden
+      data-sig-floating-next
+    >
+      <span aria-hidden="true">→</span>
+    </button>
   </div>
 </div>
 
@@ -41,14 +92,35 @@
       return;
     }
 
-    const grid = section.querySelector(".sig-feed__grid");
+    const track = section.querySelector("[data-sig-track]");
+    const viewport = section.querySelector("[data-sig-viewport]");
+    const controls = section.querySelector("[data-sig-controls]");
+    const previousButton = section.querySelector("[data-sig-previous]");
+    const nextButton = section.querySelector("[data-sig-next]");
+    const floatingNextButton = section.querySelector(
+      "[data-sig-floating-next]"
+    );
+    const counter = section.querySelector("[data-sig-counter]");
+
     const shop = section.dataset.shop;
-    const limit = Number(section.dataset.limit || 6);
+    const limit = Number(section.dataset.limit || 30);
+    const configuredColumns = Number(
+      section.dataset.columns || 6
+    );
     const apiUrl = section.dataset.apiUrl;
 
-    if (!grid || !shop || !apiUrl) {
+    if (
+      !track ||
+      !viewport ||
+      !shop ||
+      !apiUrl
+    ) {
       return;
     }
+
+    let currentIndex = 0;
+    let posts = [];
+    let resizeTimer;
 
     const escapeHtml = (value) => {
       return String(value ?? "")
@@ -65,9 +137,15 @@
       }
 
       try {
-        const url = new URL(value, window.location.origin);
+        const url = new URL(
+          value,
+          window.location.origin
+        );
 
-        if (url.protocol !== "http:" && url.protocol !== "https:") {
+        if (
+          url.protocol !== "http:" &&
+          url.protocol !== "https:"
+        ) {
           return "";
         }
 
@@ -79,32 +157,235 @@
 
     const buildHref = (post) => {
       const tag =
-        Array.isArray(post.tags) && post.tags.length > 0
+        Array.isArray(post.tags) &&
+        post.tags.length > 0
           ? post.tags[0]
           : null;
 
       if (tag?.productHandle) {
-        return `/products/${encodeURIComponent(tag.productHandle)}`;
+        return (
+          `/products/` +
+          encodeURIComponent(
+            tag.productHandle
+          )
+        );
       }
 
       if (tag?.collectionHandle) {
-        return `/collections/${encodeURIComponent(tag.collectionHandle)}`;
+        return (
+          `/collections/` +
+          encodeURIComponent(
+            tag.collectionHandle
+          )
+        );
       }
 
       return safeUrl(post.permalink) || "#";
     };
 
-    const renderPost = (post) => {
-      const mediaUrl = safeUrl(post.mediaUrl);
+    const getVisibleCount = () => {
+      const width = window.innerWidth;
+
+      if (width <= 560) {
+        return 1;
+      }
+
+      if (width <= 768) {
+        return 2;
+      }
+
+      if (width <= 1100) {
+        return 3;
+      }
+
+      return Math.max(
+        3,
+        Math.min(configuredColumns, 6)
+      );
+    };
+
+    const getGap = () => {
+      const styles =
+        window.getComputedStyle(track);
+
+      return (
+        Number.parseFloat(
+          styles.columnGap ||
+          styles.gap ||
+          "0"
+        ) || 0
+      );
+    };
+
+    const getMaximumIndex = () => {
+      return Math.max(
+        0,
+        posts.length - getVisibleCount()
+      );
+    };
+
+    const updateCounter = () => {
+      if (!counter || !posts.length) {
+        return;
+      }
+
+      const visibleCount =
+        getVisibleCount();
+
+      const firstVisible =
+        currentIndex + 1;
+
+      const lastVisible =
+        Math.min(
+          posts.length,
+          currentIndex + visibleCount
+        );
+
+      counter.textContent =
+        `${firstVisible}–${lastVisible} / ${posts.length}`;
+    };
+
+    const updateButtonStates = () => {
+      const maximumIndex =
+        getMaximumIndex();
+
+      const isAtStart =
+        currentIndex <= 0;
+
+      const isAtEnd =
+        currentIndex >= maximumIndex;
+
+      if (previousButton) {
+        previousButton.disabled =
+          isAtStart;
+      }
+
+      if (nextButton) {
+        nextButton.disabled =
+          isAtEnd;
+      }
+
+      if (floatingNextButton) {
+        floatingNextButton.disabled =
+          isAtEnd;
+
+        floatingNextButton.hidden =
+          posts.length <= getVisibleCount();
+      }
+
+      updateCounter();
+    };
+
+    const updateCarousel = ({
+      smooth = true
+    } = {}) => {
+      const firstTile =
+        track.querySelector(
+          ".sig-feed__item"
+        );
+
+      if (!firstTile) {
+        return;
+      }
+
+      const maximumIndex =
+        getMaximumIndex();
+
+      currentIndex =
+        Math.max(
+          0,
+          Math.min(
+            currentIndex,
+            maximumIndex
+          )
+        );
+
+      const tileWidth =
+        firstTile.getBoundingClientRect()
+          .width;
+
+      const distance =
+        currentIndex *
+        (tileWidth + getGap());
+
+      track.style.transition =
+        smooth
+          ? "transform 420ms cubic-bezier(0.22, 1, 0.36, 1)"
+          : "none";
+
+      track.style.transform =
+        `translate3d(-${distance}px, 0, 0)`;
+
+      updateButtonStates();
+    };
+
+    const movePrevious = () => {
+      currentIndex =
+        Math.max(
+          0,
+          currentIndex -
+            Math.max(
+              1,
+              getVisibleCount() - 1
+            )
+        );
+
+      updateCarousel();
+    };
+
+    const moveNext = () => {
+      currentIndex =
+        Math.min(
+          getMaximumIndex(),
+          currentIndex +
+            Math.max(
+              1,
+              getVisibleCount() - 1
+            )
+        );
+
+      updateCarousel();
+    };
+
+    const renderPost = (
+      post,
+      index
+    ) => {
+      const mediaUrl =
+        safeUrl(post.mediaUrl);
 
       if (!mediaUrl) {
         return "";
       }
 
-      const href = buildHref(post);
-      const caption = escapeHtml(post.caption || "Instagram post");
+      const href =
+        buildHref(post);
+
+      const caption =
+        escapeHtml(
+          post.caption ||
+          "Instagram post"
+        );
+
+      const shortCaption =
+        escapeHtml(
+          String(
+            post.caption ||
+            "View on Instagram"
+          )
+            .replace(/\s+/g, " ")
+            .trim()
+            .slice(0, 110)
+        );
+
       const hasTag =
-        Array.isArray(post.tags) && post.tags.length > 0;
+        Array.isArray(post.tags) &&
+        post.tags.length > 0;
+
+      const linkAttributes =
+        href === "#"
+          ? 'aria-disabled="true" tabindex="-1"'
+          : 'target="_self"';
 
       const media =
         post.mediaType === "VIDEO"
@@ -123,32 +404,126 @@
             <img
               src="${escapeHtml(mediaUrl)}"
               alt="${caption}"
-              loading="lazy"
-              width="800"
-              height="800"
+              loading="${index < 6 ? "eager" : "lazy"}"
+              width="900"
+              height="900"
             >
           `;
 
       return `
-        <a
-          class="sig-feed__item"
-          href="${escapeHtml(href)}"
-          ${href === "#" ? 'aria-disabled="true"' : ""}
+        <article
+          class="sig-feed__slide"
+          aria-label="Instagram post ${index + 1}"
         >
-          ${media}
+          <a
+            class="sig-feed__item"
+            href="${escapeHtml(href)}"
+            ${linkAttributes}
+          >
+            <div class="sig-feed__media">
+              ${media}
+            </div>
 
-          ${
-            hasTag
-              ? `
-                <span class="sig-feed__badge">
-                  Shop now
+            <div class="sig-feed__overlay">
+              <div class="sig-feed__overlay-content">
+                <p class="sig-feed__caption">
+                  ${shortCaption}
+                </p>
+
+                <span class="sig-feed__action">
+                  ${
+                    hasTag
+                      ? "Shop this post"
+                      : "View post"
+                  }
+
+                  <span aria-hidden="true">↗</span>
                 </span>
-              `
-              : ""
-          }
-        </a>
+              </div>
+            </div>
+
+            ${
+              hasTag
+                ? `
+                  <span class="sig-feed__badge">
+                    <span
+                      class="sig-feed__bag-icon"
+                      aria-hidden="true"
+                    >
+                      ♡
+                    </span>
+
+                    Shop now
+                  </span>
+                `
+                : ""
+            }
+          </a>
+        </article>
       `;
     };
+
+    const showMessage = (
+      message
+    ) => {
+      track.innerHTML = `
+        <p class="sig-feed__message">
+          ${escapeHtml(message)}
+        </p>
+      `;
+
+      if (controls) {
+        controls.hidden = true;
+      }
+
+      if (floatingNextButton) {
+        floatingNextButton.hidden = true;
+      }
+    };
+
+    previousButton?.addEventListener(
+      "click",
+      movePrevious
+    );
+
+    nextButton?.addEventListener(
+      "click",
+      moveNext
+    );
+
+    floatingNextButton?.addEventListener(
+      "click",
+      moveNext
+    );
+
+    section.addEventListener(
+      "keydown",
+      (event) => {
+        if (event.key === "ArrowLeft") {
+          movePrevious();
+        }
+
+        if (event.key === "ArrowRight") {
+          moveNext();
+        }
+      }
+    );
+
+    window.addEventListener(
+      "resize",
+      () => {
+        clearTimeout(resizeTimer);
+
+        resizeTimer = setTimeout(
+          () => {
+            updateCarousel({
+              smooth: false
+            });
+          },
+          120
+        );
+      }
+    );
 
     fetch(
       `${apiUrl}?shop=${encodeURIComponent(shop)}`,
@@ -169,16 +544,18 @@
         return response.json();
       })
       .then((data) => {
-        const posts = Array.isArray(data.posts)
-          ? data.posts.slice(0, limit)
+        posts = Array.isArray(data.posts)
+          ? data.posts.slice(
+              0,
+              Math.max(1, limit)
+            )
           : [];
 
         if (!posts.length) {
-          grid.innerHTML = `
-            <p class="sig-feed__message">
-              No Instagram posts found.
-            </p>
-          `;
+          showMessage(
+            "No Instagram posts found."
+          );
+
           return;
         }
 
@@ -188,15 +565,26 @@
           .join("");
 
         if (!markup) {
-          grid.innerHTML = `
-            <p class="sig-feed__message">
-              No Instagram media available.
-            </p>
-          `;
+          showMessage(
+            "No Instagram media available."
+          );
+
           return;
         }
 
-        grid.innerHTML = markup;
+        track.innerHTML = markup;
+
+        if (controls) {
+          controls.hidden =
+            posts.length <=
+            getVisibleCount();
+        }
+
+        requestAnimationFrame(() => {
+          updateCarousel({
+            smooth: false
+          });
+        });
       })
       .catch((error) => {
         console.error(
@@ -204,111 +592,386 @@
           error
         );
 
-        grid.innerHTML = `
-          <p class="sig-feed__message">
-            Instagram feed could not be loaded.
-          </p>
-        `;
+        showMessage(
+          "Instagram feed could not be loaded."
+        );
       });
   })();
 </script>
 
 <style>
   .sig-feed {
-    max-width: {{ block.settings.width }}px;
+    --sig-gap:
+      {{ block.settings.gap }}px;
+    --sig-columns:
+      {{ block.settings.columns }};
+    --sig-radius:
+      {{ block.settings.image_radius }}px;
+
+    position: relative;
+    width: min(
+      calc(100% - 40px),
+      {{ block.settings.width }}px
+    );
+    max-width:
+      {{ block.settings.width }}px;
     margin: 0 auto;
     padding:
       {{ block.settings.padding_top }}px
-      20px
+      0
       {{ block.settings.padding_bottom }}px;
   }
 
   .sig-feed__header {
     display: flex;
-    align-items: end;
+    align-items: flex-end;
     justify-content: space-between;
-    gap: 24px;
-    margin-bottom: 28px;
+    gap: 28px;
+    margin-bottom: 30px;
+  }
+
+  .sig-feed__heading-group {
+    min-width: 0;
   }
 
   .sig-feed__eyebrow {
     margin: 0 0 10px;
     font-size: 13px;
     line-height: 1.3;
-    letter-spacing: 0.14em;
+    letter-spacing: 0.16em;
     text-transform: uppercase;
-    opacity: 0.65;
+    opacity: 0.62;
   }
 
   .sig-feed__heading {
     margin: 0;
-    font-size: {{ block.settings.heading_size }}px;
-    line-height: 1.05;
+    font-size:
+      {{ block.settings.heading_size }}px;
+    line-height: 1.04;
     letter-spacing: -0.04em;
   }
 
-  .sig-feed__grid {
-    display: grid;
-    grid-template-columns:
-      repeat({{ block.settings.columns }}, minmax(0, 1fr));
-    gap: {{ block.settings.gap }}px;
+  .sig-feed__controls {
+    display: flex;
+    flex: 0 0 auto;
+    align-items: center;
+    gap: 10px;
   }
 
-  .sig-feed__message {
-    grid-column: 1 / -1;
+  .sig-feed__counter {
+    min-width: 82px;
+    margin: 0 4px 0 0;
+    font-size: 12px;
+    line-height: 1;
+    letter-spacing: 0.08em;
+    text-align: right;
+    opacity: 0.55;
+  }
+
+  .sig-feed__arrow,
+  .sig-feed__floating-arrow {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 46px;
+    height: 46px;
+    padding: 0;
+    border: 1px solid
+      rgba(17, 17, 17, 0.16);
+    border-radius: 50%;
+    background:
+      rgba(255, 255, 255, 0.92);
+    color: #111111;
+    font: inherit;
+    font-size: 21px;
+    line-height: 1;
+    cursor: pointer;
+    box-shadow:
+      0 6px 18px
+      rgba(0, 0, 0, 0.08);
+    backdrop-filter: blur(12px);
+    transition:
+      transform 180ms ease,
+      background 180ms ease,
+      opacity 180ms ease,
+      box-shadow 180ms ease;
+  }
+
+  .sig-feed__arrow:hover,
+  .sig-feed__floating-arrow:hover {
+    transform: translateY(-2px);
+    background: #ffffff;
+    box-shadow:
+      0 10px 26px
+      rgba(0, 0, 0, 0.13);
+  }
+
+  .sig-feed__arrow:disabled,
+  .sig-feed__floating-arrow:disabled {
+    opacity: 0.3;
+    cursor: default;
+    transform: none;
+    box-shadow: none;
+  }
+
+  .sig-feed__carousel {
+    position: relative;
+  }
+
+  .sig-feed__viewport {
+    width: 100%;
+    overflow: hidden;
+    padding:
+      18px
+      0
+      24px;
+    margin:
+      -18px
+      0
+      -24px;
+  }
+
+  .sig-feed__track {
+    display: flex;
+    align-items: stretch;
+    gap: var(--sig-gap);
+    width: 100%;
+    will-change: transform;
+    transform: translate3d(0, 0, 0);
+  }
+
+  .sig-feed__slide {
+    flex:
+      0 0
+      calc(
+        (
+          100% -
+          (
+            var(--sig-gap) *
+            (var(--sig-columns) - 1)
+          )
+        ) /
+        var(--sig-columns)
+      );
+    min-width: 0;
     margin: 0;
+    transition:
+      transform 320ms
+      cubic-bezier(0.22, 1, 0.36, 1);
+  }
+
+  .sig-feed__slide:hover {
+    position: relative;
+    z-index: 4;
+    transform:
+      scale(1.055)
+      translateY(-4px);
   }
 
   .sig-feed__item {
     position: relative;
     display: block;
+    width: 100%;
     aspect-ratio: 1 / 1;
     overflow: hidden;
-    background: #f4f4f4;
-    border-radius: {{ block.settings.image_radius }}px;
-    color: inherit;
+    border-radius: var(--sig-radius);
+    background: #ece9e3;
+    color: #ffffff;
     text-decoration: none;
+    isolation: isolate;
+    box-shadow:
+      0 1px 0
+      rgba(0, 0, 0, 0.04);
+    transition:
+      box-shadow 320ms ease;
+  }
+
+  .sig-feed__slide:hover
+  .sig-feed__item {
+    box-shadow:
+      0 18px 42px
+      rgba(0, 0, 0, 0.2);
   }
 
   .sig-feed__item[aria-disabled="true"] {
     cursor: default;
   }
 
-  .sig-feed__item img,
-  .sig-feed__item video {
+  .sig-feed__media {
+    position: absolute;
+    inset: 0;
+  }
+
+  .sig-feed__media img,
+  .sig-feed__media video {
     width: 100%;
     height: 100%;
     object-fit: cover;
     display: block;
-    transition: transform 240ms ease;
+    filter:
+      grayscale(
+        {{ block.settings.grayscale }}%
+      )
+      saturate(0.82)
+      contrast(1.02);
+    transform: scale(1.002);
+    transition:
+      filter 420ms ease,
+      transform 520ms
+      cubic-bezier(0.22, 1, 0.36, 1);
   }
 
-  .sig-feed__item:hover img,
-  .sig-feed__item:hover video {
-    transform: scale(1.025);
+  .sig-feed__item:hover
+  .sig-feed__media img,
+  .sig-feed__item:hover
+  .sig-feed__media video {
+    filter:
+      grayscale(0%)
+      saturate(1)
+      contrast(1);
+    transform: scale(1.035);
+  }
+
+  .sig-feed__overlay {
+    position: absolute;
+    inset: 0;
+    z-index: 1;
+    display: flex;
+    align-items: flex-end;
+    padding: 18px;
+    background:
+      linear-gradient(
+        to top,
+        rgba(0, 0, 0, 0.68) 0%,
+        rgba(0, 0, 0, 0.18) 48%,
+        rgba(0, 0, 0, 0) 75%
+      );
+    opacity: 0;
+    transform:
+      translateY(8px);
+    transition:
+      opacity 280ms ease,
+      transform 320ms ease;
+  }
+
+  .sig-feed__item:hover
+  .sig-feed__overlay,
+  .sig-feed__item:focus-visible
+  .sig-feed__overlay {
+    opacity: 1;
+    transform:
+      translateY(0);
+  }
+
+  .sig-feed__overlay-content {
+    width: 100%;
+  }
+
+  .sig-feed__caption {
+    display: -webkit-box;
+    overflow: hidden;
+    margin: 0 0 12px;
+    font-size: 13px;
+    line-height: 1.4;
+    -webkit-line-clamp: 3;
+    -webkit-box-orient: vertical;
+  }
+
+  .sig-feed__action {
+    display: inline-flex;
+    align-items: center;
+    gap: 7px;
+    padding-bottom: 3px;
+    border-bottom:
+      1px solid
+      rgba(255, 255, 255, 0.72);
+    font-size: 12px;
+    font-weight: 650;
+    line-height: 1.2;
+    letter-spacing: 0.04em;
+    text-transform: uppercase;
   }
 
   .sig-feed__badge {
     position: absolute;
     left: 12px;
     bottom: 12px;
-    z-index: 2;
+    z-index: 3;
     display: inline-flex;
     align-items: center;
+    gap: 7px;
     min-height: 34px;
     padding: 7px 12px;
     border-radius: 999px;
-    background: rgba(255, 255, 255, 0.94);
+    background:
+      rgba(255, 255, 255, 0.94);
     color: #111111;
-    font-size: 13px;
-    font-weight: 600;
+    font-size: 12px;
+    font-weight: 650;
     line-height: 1;
-    box-shadow: 0 2px 10px rgba(0, 0, 0, 0.12);
-    backdrop-filter: blur(8px);
+    box-shadow:
+      0 3px 14px
+      rgba(0, 0, 0, 0.14);
+    backdrop-filter: blur(10px);
+    transition:
+      opacity 220ms ease,
+      transform 220ms ease;
+  }
+
+  .sig-feed__item:hover
+  .sig-feed__badge {
+    opacity: 0;
+    transform:
+      translateY(5px);
+  }
+
+  .sig-feed__bag-icon {
+    font-size: 13px;
+    line-height: 1;
+  }
+
+  .sig-feed__floating-arrow {
+    position: absolute;
+    top: 50%;
+    right: -22px;
+    z-index: 6;
+    width: 54px;
+    height: 54px;
+    transform:
+      translateY(-50%);
+  }
+
+  .sig-feed__floating-arrow:hover {
+    transform:
+      translateY(
+        calc(-50% - 2px)
+      );
+  }
+
+  .sig-feed__floating-arrow:disabled {
+    transform:
+      translateY(-50%);
+  }
+
+  .sig-feed__message {
+    flex: 0 0 100%;
+    margin: 0;
+  }
+
+  @media screen and (max-width: 1100px) {
+    .sig-feed {
+      --sig-columns: 3;
+    }
   }
 
   @media screen and (max-width: 768px) {
     .sig-feed {
+      --sig-columns: 2;
+      --sig-gap:
+        {{ block.settings.gap_mobile }}px;
+
+      width: 100%;
+      max-width: none;
       padding:
         {{ block.settings.padding_top_mobile }}px
         0
@@ -317,44 +980,157 @@
     }
 
     .sig-feed__header {
-      display: block;
+      align-items: center;
       padding-right: 16px;
-      margin-bottom: 22px;
+      margin-bottom: 18px;
     }
 
-    .sig-feed__grid {
-      display: flex;
-      overflow-x: auto;
-      gap: {{ block.settings.gap_mobile }}px;
-      padding-right: 16px;
-      scroll-snap-type: x mandatory;
-      scrollbar-width: none;
-      -webkit-overflow-scrolling: touch;
+    .sig-feed__heading {
+      font-size:
+        min(
+          {{ block.settings.heading_size }}px,
+          38px
+        );
     }
 
-    .sig-feed__grid::-webkit-scrollbar {
+    .sig-feed__counter,
+    .sig-feed__arrow--previous {
       display: none;
     }
 
-    .sig-feed__item {
-      flex: 0 0 72%;
+    .sig-feed__arrow {
+      width: 42px;
+      height: 42px;
+    }
+
+    .sig-feed__viewport {
+      overflow-x: auto;
+      overflow-y: visible;
+      padding:
+        10px
+        16px
+        18px
+        0;
+      margin:
+        -10px
+        0
+        -18px;
+      scroll-snap-type:
+        x mandatory;
+      scrollbar-width: none;
+      -webkit-overflow-scrolling:
+        touch;
+    }
+
+    .sig-feed__viewport::-webkit-scrollbar {
+      display: none;
+    }
+
+    .sig-feed__track {
+      width: max-content;
+      transform: none !important;
+      transition: none !important;
+    }
+
+    .sig-feed__slide {
+      flex:
+        0 0
+        min(
+          68vw,
+          320px
+        );
+      width:
+        min(
+          68vw,
+          320px
+        );
       scroll-snap-align: start;
     }
 
-    .sig-feed__message {
-      flex: 0 0 auto;
-      padding-right: 16px;
+    .sig-feed__slide:hover {
+      transform: none;
+    }
+
+    .sig-feed__floating-arrow {
+      display: none;
+    }
+
+    .sig-feed__overlay {
+      opacity: 1;
+      transform: none;
+      background:
+        linear-gradient(
+          to top,
+          rgba(0, 0, 0, 0.48) 0%,
+          rgba(0, 0, 0, 0) 52%
+        );
+    }
+
+    .sig-feed__caption {
+      display: none;
+    }
+
+    .sig-feed__badge {
+      display: none;
     }
   }
 
-  @media (prefers-reduced-motion: reduce) {
-    .sig-feed__item img,
-    .sig-feed__item video {
-      transition: none;
+  @media screen and (max-width: 560px) {
+    .sig-feed {
+      --sig-columns: 1;
     }
 
-    .sig-feed__item:hover img,
-    .sig-feed__item:hover video {
+    .sig-feed__slide {
+      flex:
+        0 0
+        min(
+          78vw,
+          310px
+        );
+      width:
+        min(
+          78vw,
+          310px
+        );
+    }
+  }
+
+  @media (hover: none) {
+    .sig-feed__slide:hover {
+      transform: none;
+    }
+
+    .sig-feed__media img,
+    .sig-feed__media video {
+      filter:
+        grayscale(
+          calc(
+            {{ block.settings.grayscale }}% / 2
+          )
+        );
+    }
+  }
+
+  @media (
+    prefers-reduced-motion: reduce
+  ) {
+    .sig-feed__track,
+    .sig-feed__slide,
+    .sig-feed__item,
+    .sig-feed__media img,
+    .sig-feed__media video,
+    .sig-feed__overlay,
+    .sig-feed__badge,
+    .sig-feed__arrow,
+    .sig-feed__floating-arrow {
+      transition: none !important;
+    }
+
+    .sig-feed__slide:hover,
+    .sig-feed__item:hover
+    .sig-feed__media img,
+    .sig-feed__item:hover
+    .sig-feed__media video {
       transform: none;
     }
   }
@@ -375,21 +1151,21 @@
       "type": "text",
       "id": "heading",
       "label": "Heading",
-      "default": "Shop our Instagram"
+      "default": "Check our Instagram"
     },
     {
       "type": "range",
       "id": "limit",
       "label": "Number of posts",
-      "min": 3,
-      "max": 12,
+      "min": 6,
+      "max": 50,
       "step": 1,
-      "default": 6
+      "default": 30
     },
     {
       "type": "range",
       "id": "columns",
-      "label": "Desktop columns",
+      "label": "Visible posts on desktop",
       "min": 3,
       "max": 6,
       "step": 1,
@@ -397,9 +1173,19 @@
     },
     {
       "type": "range",
+      "id": "grayscale",
+      "label": "Default grayscale amount",
+      "min": 0,
+      "max": 100,
+      "step": 5,
+      "default": 35,
+      "unit": "%"
+    },
+    {
+      "type": "range",
       "id": "gap",
       "label": "Desktop gap",
-      "min": 0,
+      "min": 4,
       "max": 32,
       "step": 1,
       "default": 12,
@@ -409,7 +1195,7 @@
       "type": "range",
       "id": "gap_mobile",
       "label": "Mobile gap",
-      "min": 0,
+      "min": 4,
       "max": 24,
       "step": 1,
       "default": 10,
@@ -422,7 +1208,7 @@
       "min": 0,
       "max": 32,
       "step": 1,
-      "default": 0,
+      "default": 10,
       "unit": "px"
     },
     {
@@ -439,10 +1225,10 @@
       "type": "range",
       "id": "width",
       "label": "Section width",
-      "min": 900,
-      "max": 1800,
+      "min": 1000,
+      "max": 2000,
       "step": 20,
-      "default": 1400,
+      "default": 1600,
       "unit": "px"
     },
     {
