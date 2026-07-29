@@ -49,10 +49,17 @@
         id="sig-feed-{{ block.id }}"
         aria-live="polite"
         data-sig-track
+        aria-busy="true"
       >
-        <p class="sig-feed__message">
-          Loading Instagram feed...
-        </p>
+        <div
+          class="sig-feed__skeleton"
+          aria-hidden="true"
+          data-sig-skeleton
+        >
+          {% for i in (1..6) %}
+            <div class="sig-feed__skeleton-item"></div>
+          {% endfor %}
+        </div>
       </div>
     </div>
 
@@ -455,9 +462,20 @@
       `;
     };
 
+    const setLoadingState = (
+      isLoading
+    ) => {
+      track.setAttribute(
+        "aria-busy",
+        String(isLoading)
+      );
+    };
+
     const showMessage = (
       message
     ) => {
+      setLoadingState(false);
+
       track.innerHTML = `
         <p class="sig-feed__message">
           ${escapeHtml(message)}
@@ -559,6 +577,7 @@
           return;
         }
 
+        setLoadingState(false);
         track.innerHTML = markup;
 
         requestAnimationFrame(() => {
@@ -972,6 +991,55 @@
       translateY(-50%);
   }
 
+  .sig-feed__skeleton {
+    display: grid;
+    grid-template-columns:
+      repeat(
+        var(--sig-columns),
+        minmax(0, 1fr)
+      );
+    gap: var(--sig-gap);
+    flex: 0 0 100%;
+    width: 100%;
+    opacity: 0;
+    animation:
+      sig-feed-skeleton-show
+      1ms linear 150ms forwards;
+  }
+
+  .sig-feed__skeleton-item {
+    width: 100%;
+    aspect-ratio: 1 / 1;
+    border-radius: var(--sig-radius);
+    background:
+      linear-gradient(
+        100deg,
+        #ece9e3 20%,
+        #f6f4f0 38%,
+        #ece9e3 56%
+      );
+    background-size: 220% 100%;
+    animation:
+      sig-feed-skeleton-shimmer
+      1.35s ease-in-out infinite;
+  }
+
+  @keyframes sig-feed-skeleton-show {
+    to {
+      opacity: 1;
+    }
+  }
+
+  @keyframes sig-feed-skeleton-shimmer {
+    from {
+      background-position: 120% 0;
+    }
+
+    to {
+      background-position: -120% 0;
+    }
+  }
+
   .sig-feed__message {
     flex: 0 0 100%;
     margin: 0;
@@ -1128,6 +1196,15 @@
     .sig-feed__badge,
     .sig-feed__floating-arrow {
       transition: none !important;
+    }
+
+    .sig-feed__skeleton,
+    .sig-feed__skeleton-item {
+      animation: none !important;
+    }
+
+    .sig-feed__skeleton {
+      opacity: 1;
     }
 
     .sig-feed__slide:hover,
