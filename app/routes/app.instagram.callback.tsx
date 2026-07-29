@@ -704,33 +704,32 @@ export const loader = async ({
 
     if (!shortLivedToken) {
       throw new Error(
-        "Meta did not return an access token.",
+        "Meta did not return a short-lived access token.",
       );
     }
 
-    let longLivedTokenResponse:
-      MetaTokenResponse = {};
-
-    try {
-      longLivedTokenResponse =
-        await exchangeLongLivedToken({
-          shortLivedToken,
-          appId:
-            metaAppId,
-          appSecret:
-            metaAppSecret,
-        });
-    } catch (error) {
-      console.warn(
-        "Meta long-lived token exchange failed. " +
-          "Continuing with the short-lived token:",
-        getErrorMessage(error),
-      );
-    }
+    /*
+     * A successful connection now requires a long-lived token.
+     * The app no longer falls back to the short-lived token.
+     */
+    const longLivedTokenResponse =
+      await exchangeLongLivedToken({
+        shortLivedToken,
+        appId:
+          metaAppId,
+        appSecret:
+          metaAppSecret,
+      });
 
     const longLivedToken =
       longLivedTokenResponse
         .access_token;
+
+    if (!longLivedToken) {
+      throw new Error(
+        "Meta did not return a long-lived access token.",
+      );
+    }
 
     console.log(
       "META TOKEN DEBUG:",
@@ -747,105 +746,43 @@ export const loader = async ({
           longLivedTokenResponse
             .token_type ||
           null,
+        longLivedExpiresIn:
+          longLivedTokenResponse
+            .expires_in ||
+          null,
       },
     );
 
-    const shortLivedUserId =
+    /*
+     * All account and Page requests use the long-lived token.
+     * There is no short-lived-token fallback.
+     */
+    const facebookUserId =
       await getFacebookUserId(
-        shortLivedToken,
+        longLivedToken,
       );
 
-    const shortLivedPages =
+    const pages =
       await getFacebookPages(
-        shortLivedToken,
+        longLivedToken,
       );
 
     console.log(
-      "META SHORT-LIVED TOKEN RESULT:",
+      "META LONG-LIVED TOKEN RESULT:",
       {
         facebookUserId:
-          shortLivedUserId ||
+          facebookUserId ||
           null,
         pages:
           sanitizePagesForLog(
-            shortLivedPages,
+            pages,
           ),
       },
     );
 
-    let longLivedUserId:
-      string | undefined;
-
-    let longLivedPages:
-      MetaPage[] = [];
-
-    if (longLivedToken) {
-      longLivedUserId =
-        await getFacebookUserId(
-          longLivedToken,
-        );
-
-      longLivedPages =
-        await getFacebookPages(
-          longLivedToken,
-        );
-
-      console.log(
-        "META LONG-LIVED TOKEN RESULT:",
-        {
-          facebookUserId:
-            longLivedUserId ||
-            null,
-          pages:
-            sanitizePagesForLog(
-              longLivedPages,
-            ),
-        },
-      );
-    }
-
-    const useLongLivedToken =
-      Boolean(longLivedToken) &&
-      longLivedPages.length > 0;
-
-    const facebookUserAccessToken =
-      useLongLivedToken
-        ? longLivedToken
-        : shortLivedToken;
-
-    const facebookUserId =
-      useLongLivedToken
-        ? longLivedUserId
-        : shortLivedUserId;
-
-    const pages =
-      useLongLivedToken
-        ? longLivedPages
-        : shortLivedPages;
-
-    const tokenResponseUsed =
-      useLongLivedToken
-        ? longLivedTokenResponse
-        : shortLivedTokenResponse;
-
-    console.log(
-      "META TOKEN SELECTED:",
-      {
-        tokenType:
-          useLongLivedToken
-            ? "LONG_LIVED"
-            : "SHORT_LIVED",
-        facebookUserId:
-          facebookUserId ||
-          null,
-        pageCount:
-          pages.length,
-      },
-    );
-
-    if (!facebookUserAccessToken) {
+    if (pages.length === 0) {
       throw new Error(
-        "Meta did not return a usable access token.",
+        "Meta returned no Facebook Pages for the long-lived token.",
       );
     }
 
@@ -872,21 +809,14 @@ export const loader = async ({
     const issuedAt =
       new Date();
 
-    const expiresInSeconds =
-      tokenResponseUsed
-        .expires_in;
-
-    const tokenExpiresAt =
-      typeof expiresInSeconds ===
-        "number" &&
-      expiresInSeconds > 0
-        ? new Date(
-            issuedAt.getTime() +
-              expiresInSeconds *
-                1000,
-          )
-        : undefined;
-
+    /*
+     * The token being saved below is the Page access token returned
+     * by /me/accounts. Meta's expires_in value belongs to the
+     * long-lived user token, not necessarily to the Page token.
+     *
+     * Therefore tokenExpiresAt is intentionally left undefined here
+     * rather than storing an inaccurate expiration date.
+     */
     await upsertInstagramAccount({
       shop:
         state.shop,
@@ -901,13 +831,11 @@ export const loader = async ({
       accessToken:
         selectedPage.access_token,
       tokenType:
-        tokenResponseUsed
-          .token_type ||
-        "bearer",
+        "page_access_token",
       tokenIssuedAt:
         issuedAt,
       tokenExpiresAt:
-        tokenExpiresAt,
+        undefined,
       grantedScopes: [
         "pages_show_list",
         "pages_read_engagement",
@@ -916,6 +844,23 @@ export const loader = async ({
       connected:
         true,
     });
+
+    console.log(
+      "INSTAGRAM ACCOUNT CONNECTED:",
+      {
+        shop:
+          state.shop,
+        pageId:
+          selectedPage.id,
+        instagramId:
+          instagramAccount.id,
+        username:
+          instagramAccount.username ||
+          null,
+        tokenStored:
+          "PAGE_ACCESS_TOKEN",
+      },
+    );
 
     return redirectToShopifyAdmin(
       buildInstagramRedirect({
