@@ -18,6 +18,7 @@ import {
   createInstagramPost,
   deleteInstagramPost,
   deleteInstagramPostTag,
+  disconnectInstagramAccount,
   getInstagramAccount,
   getInstagramPosts,
   tagInstagramPost,
@@ -256,6 +257,23 @@ export const action = async ({
     String(
       formData.get("intent") || "",
     );
+
+
+  if (
+    intent ===
+    "disconnect-instagram"
+  ) {
+    await disconnectInstagramAccount(
+      session.shop,
+    );
+
+    return {
+      success: true,
+      message:
+        "Instagram account disconnected. Previously synced posts remain saved.",
+      error: null,
+    };
+  }
 
 
   if (
@@ -666,6 +684,12 @@ export default function InstagramPage() {
       "sync-instagram";
 
 
+  const isDisconnecting =
+    isSubmitting &&
+    submittingIntent ===
+      "disconnect-instagram";
+
+
   const hasConnectedAccount =
     Boolean(account?.connected) &&
     !account?.reconnectRequired;
@@ -1021,11 +1045,59 @@ export default function InstagramPage() {
           ) : hasConnectedAccount ? (
 
             <>
-              <s-paragraph>
-                {account.username
-                  ? `Connected as @${account.username}.`
-                  : "Instagram account connected."}
-              </s-paragraph>
+              <div
+                style={{
+                  display:"flex",
+                  alignItems:"center",
+                  gap:"12px",
+                  flexWrap:"wrap",
+                }}
+              >
+                <s-paragraph>
+                  {account.username
+                    ? `Connected as @${account.username}.`
+                    : "Instagram account connected."}
+                </s-paragraph>
+
+
+                <Form
+                  method="post"
+                  onSubmit={(event) => {
+                    const confirmed =
+                      window.confirm(
+                        "Disconnect Instagram? Previously synced posts will remain saved.",
+                      );
+
+                    if (!confirmed) {
+                      event.preventDefault();
+                    }
+                  }}
+                >
+                  <input
+                    type="hidden"
+                    name="intent"
+                    value="disconnect-instagram"
+                  />
+
+                  <button
+                    type="submit"
+                    disabled={isDisconnecting}
+                    style={{
+                      ...secondaryButtonStyle,
+                      cursor:isDisconnecting
+                        ? "not-allowed"
+                        : "pointer",
+                      opacity:isDisconnecting
+                        ? 0.6
+                        : 1,
+                    }}
+                  >
+                    {isDisconnecting
+                      ? "Disconnecting..."
+                      : "Disconnect"}
+                  </button>
+                </Form>
+              </div>
 
 
               <Form method="post">
