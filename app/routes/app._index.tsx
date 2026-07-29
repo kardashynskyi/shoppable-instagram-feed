@@ -21,29 +21,7 @@ export const loader = async ({
 }: LoaderFunctionArgs) => {
   await authenticate.admin(request);
 
-  const url = new URL(request.url);
-
-  const params = new URLSearchParams();
-
-  const embedded = url.searchParams.get("embedded");
-  const host = url.searchParams.get("host");
-  const shop = url.searchParams.get("shop");
-
-  if (embedded) {
-    params.set("embedded", embedded);
-  }
-
-  if (host) {
-    params.set("host", host);
-  }
-
-  if (shop) {
-    params.set("shop", shop);
-  }
-
-  return redirect(
-    `/app/instagram?${params.toString()}`
-  );
+  return redirect("/app/instagram");
 };
 
 
