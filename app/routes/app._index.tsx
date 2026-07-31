@@ -4,7 +4,11 @@ import type {
 } from "react-router";
 
 import {
-  redirect,
+  useEffect,
+} from "react";
+
+import {
+  useNavigate,
 } from "react-router";
 
 import {
@@ -21,19 +25,32 @@ export const loader = async ({
 }: LoaderFunctionArgs) => {
   await authenticate.admin(request);
 
-  return redirect("/app/instagram");
+  return null;
 };
 
 
 export default function Index() {
+  const navigate =
+    useNavigate();
+
+  useEffect(() => {
+    navigate(
+      "/app/instagram",
+      {
+        replace: true,
+      },
+    );
+  }, [navigate]);
+
   return null;
 }
 
 
-export const headers: HeadersFunction = (
-  headersArgs,
-) => {
-  return boundary.headers(
+export const headers:
+  HeadersFunction = (
     headersArgs,
-  );
-};
+  ) => {
+    return boundary.headers(
+      headersArgs,
+    );
+  };
