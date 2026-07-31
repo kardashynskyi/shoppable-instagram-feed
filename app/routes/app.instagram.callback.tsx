@@ -1,15 +1,10 @@
 import type {
-  HeadersFunction,
   LoaderFunctionArgs,
 } from "react-router";
 
 import {
   redirect,
 } from "react-router";
-
-import {
-  boundary,
-} from "@shopify/shopify-app-react-router/server";
 
 import {
   upsertInstagramAccount,
@@ -884,18 +879,3 @@ export const loader = async ({
     );
   }
 };
-
-
-export default function InstagramCallbackRoute() {
-  return null;
-}
-
-
-export const headers:
-  HeadersFunction = (
-    headersArgs,
-  ) => {
-    return boundary.headers(
-      headersArgs,
-    );
-  };
