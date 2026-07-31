@@ -344,22 +344,6 @@
           "Instagram post"
         );
 
-      const normalizedCaption =
-        String(post.caption || "")
-          .replace(/\s+/g, " ")
-          .trim();
-
-      const hashtagMatch =
-        normalizedCaption.match(
-          /#[\p{L}\p{N}_]+/u
-        );
-
-      const displayHashtag =
-        escapeHtml(
-          hashtagMatch?.[0] ||
-          "#carpathianwool"
-        );
-
       const hasTag =
         Array.isArray(post.tags) &&
         post.tags.length > 0;
@@ -389,8 +373,10 @@
               src="${escapeHtml(mediaUrl)}"
               alt="${caption}"
               loading="${index < 6 ? "eager" : "lazy"}"
-              width="900"
-              height="900"
+              fetchpriority="${index < 6 ? "high" : "auto"}"
+              decoding="async"
+              width="1200"
+              height="1200"
             >
           `;
 
@@ -410,10 +396,6 @@
 
             <div class="sig-feed__overlay">
               <div class="sig-feed__overlay-content">
-                <p class="sig-feed__caption">
-                  ${displayHashtag}
-                </p>
-
                 <span class="sig-feed__action">
                   ${
                     hasTag
@@ -620,6 +602,23 @@
       {{ block.settings.padding_top }}px
       0
       {{ block.settings.padding_bottom }}px;
+
+    font-family:
+      var(--font-body-family, inherit);
+    font-style:
+      var(--font-body-style, normal);
+    font-weight:
+      var(--font-body-weight, 400);
+
+    {% if block.settings.use_custom_background %}
+      background:
+        {{ block.settings.background_color }};
+      box-shadow:
+        0 0 0 100vmax
+        {{ block.settings.background_color }};
+      clip-path:
+        inset(0 -100vmax);
+    {% endif %}
   }
 
   .sig-feed__header {
@@ -636,6 +635,12 @@
 
   .sig-feed__eyebrow {
     margin: 0 0 10px;
+    font-family:
+      var(--font-body-family, inherit);
+    font-style:
+      var(--font-body-style, normal);
+    font-weight:
+      var(--font-body-weight, 400);
     font-size: 13px;
     line-height: 1.3;
     letter-spacing: 0.16em;
@@ -645,6 +650,12 @@
 
   .sig-feed__heading {
     margin: 0;
+    font-family:
+      var(--font-heading-family, inherit);
+    font-style:
+      var(--font-heading-style, normal);
+    font-weight:
+      var(--font-heading-weight, 400);
     font-size:
       {{ block.settings.heading_size }}px;
     line-height: 1.04;
@@ -792,16 +803,17 @@
     height: 100%;
     object-fit: cover;
     display: block;
+    image-rendering: auto;
     filter:
       grayscale(
         {{ block.settings.grayscale }}%
-      )
-      saturate(0.82)
-      contrast(1.02);
-    transform: scale(1.002);
+      );
+    transform: none;
+    backface-visibility: hidden;
+    -webkit-backface-visibility: hidden;
     transition:
-      filter 420ms ease,
-      transform 520ms
+      filter 320ms ease,
+      transform 420ms
       cubic-bezier(0.22, 1, 0.36, 1);
   }
 
@@ -809,11 +821,8 @@
   .sig-feed__media img,
   .sig-feed__item:hover
   .sig-feed__media video {
-    filter:
-      grayscale(0%)
-      saturate(1)
-      contrast(1);
-    transform: scale(1.035);
+    filter: grayscale(0%);
+    transform: scale(1.012);
   }
 
   .sig-feed__overlay {
@@ -849,13 +858,6 @@
 
   .sig-feed__overlay-content {
     width: 100%;
-  }
-
-  .sig-feed__caption {
-    margin: 0 0 16px;
-    font-size: 13px;
-    font-weight: 600;
-    line-height: 1.3;
   }
 
   .sig-feed__action {
@@ -1181,6 +1183,7 @@
             {{ block.settings.grayscale }}% / 2
           )
         );
+      transform: none;
     }
   }
 
@@ -1235,6 +1238,18 @@
       "default": "Check our Instagram"
     },
     {
+      "type": "checkbox",
+      "id": "use_custom_background",
+      "label": "Use custom section background",
+      "default": false
+    },
+    {
+      "type": "color",
+      "id": "background_color",
+      "label": "Section background",
+      "default": "#f5f1e9"
+    },
+    {
       "type": "range",
       "id": "limit",
       "label": "Number of posts",
@@ -1259,7 +1274,7 @@
       "min": 0,
       "max": 100,
       "step": 5,
-      "default": 35,
+      "default": 0,
       "unit": "%"
     },
     {
