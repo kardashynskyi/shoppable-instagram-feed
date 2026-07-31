@@ -74,6 +74,11 @@ function buildMetaAuthorizationUrl({
       "META_REDIRECT_URI",
     );
 
+  const metaLoginConfigId =
+    requireEnvironmentVariable(
+      "META_LOGIN_CONFIG_ID",
+    );
+
   const state =
     Buffer.from(
       JSON.stringify({
@@ -100,6 +105,11 @@ function buildMetaAuthorizationUrl({
   authorizationUrl.searchParams.set(
     "response_type",
     "code",
+  );
+
+  authorizationUrl.searchParams.set(
+    "config_id",
+    metaLoginConfigId,
   );
 
   authorizationUrl.searchParams.set(
