@@ -187,16 +187,19 @@ export const loader = async ({
 
 
   if (!host) {
-    throw new Response(
-      "The Shopify host parameter is missing.",
-      {
-        status: 400,
-      },
-    );
-  }
+  return {
+    connectInstagramUrl: "",
+    account: null,
+    posts: [],
+    stats: {
+      totalPosts: 0,
+      shoppablePosts: 0,
+    },
+  };
+}
 
 
-  const connectInstagramUrl =
+const connectInstagramUrl =
     buildMetaAuthorizationUrl({
       shop:
         session.shop,

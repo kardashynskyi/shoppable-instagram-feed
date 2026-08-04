@@ -1,0 +1,901 @@
+import type {
+  HeadersFunction,
+  LoaderFunctionArgs,
+} from "react-router";
+
+import {
+  redirect,
+} from "react-router";
+
+import {
+  boundary,
+} from "@shopify/shopify-app-react-router/server";
+
+import {
+  upsertInstagramAccount,
+} from "../models/instagram-feed.server";
+
+
+const META_GRAPH_API_VERSION =
+  process.env.META_GRAPH_API_VERSION || "v25.0";
+
+const META_GRAPH_API_BASE =
+  `https://graph.facebook.com/${META_GRAPH_API_VERSION}`;
+
+const MAXIMUM_STATE_AGE_MS =
+  15 * 60 * 1000;
+
+
+type OAuthState = {
+  shop: string;
+  host: string;
+  createdAt: number;
+};
+
+
+type MetaError = {
+  message?: string;
+  type?: string;
+  code?: number;
+  error_subcode?: number;
+  fbtrace_id?: string;
+};
+
+
+type MetaTokenResponse = {
+  access_token?: string;
+  token_type?: string;
+  expires_in?: number;
+  error?: MetaError;
+};
+
+
+type MetaUserResponse = {
+  id?: string;
+  error?: MetaError;
+};
+
+
+type MetaInstagramAccount = {
+  id?: string;
+  username?: string;
+};
+
+
+type MetaPage = {
+  id?: string;
+  name?: string;
+  access_token?: string;
+  instagram_business_account?: MetaInstagramAccount;
+};
+
+
+type MetaPagesResponse = {
+  data?: MetaPage[];
+  paging?: {
+    next?: string;
+  };
+  error?: MetaError;
+};
+
+
+function requireEnvironmentVariable(
+  name: string,
+): string {
+  const value =
+    process.env[name]?.trim();
+
+  if (!value) {
+    throw new Error(
+      `${name} is missing from the server environment.`,
+    );
+  }
+
+  return value;
+}
+
+
+function getErrorMessage(
+  error: unknown,
+): string {
+  if (error instanceof Error) {
+    return error.message;
+  }
+
+  return "Instagram connection failed.";
+}
+
+
+function parseOAuthState(
+  value: string | null,
+): OAuthState {
+  if (!value) {
+    throw new Error(
+      "The Meta OAuth state parameter is missing.",
+    );
+  }
+
+  let parsed: unknown;
+
+  try {
+    const decoded =
+      Buffer.from(
+        value,
+        "base64url",
+      ).toString("utf8");
+
+    parsed =
+      JSON.parse(decoded);
+  } catch {
+    throw new Error(
+      "The Meta OAuth state has an invalid format.",
+    );
+  }
+
+  if (
+    typeof parsed !== "object" ||
+    parsed === null ||
+    !("shop" in parsed) ||
+    !("host" in parsed) ||
+    !("createdAt" in parsed)
+  ) {
+    throw new Error(
+      "The Meta OAuth state is invalid.",
+    );
+  }
+
+  const shop =
+    String(parsed.shop || "")
+      .trim()
+      .toLowerCase();
+
+  const host =
+    String(parsed.host || "")
+      .trim();
+
+  const createdAt =
+    Number(parsed.createdAt);
+
+  if (
+    !shop ||
+    !shop.endsWith(".myshopify.com") ||
+    !host ||
+    !Number.isFinite(createdAt)
+  ) {
+    throw new Error(
+      "The Meta OAuth state is invalid.",
+    );
+  }
+
+  if (
+    createdAt > Date.now() ||
+    Date.now() - createdAt >
+      MAXIMUM_STATE_AGE_MS
+  ) {
+    throw new Error(
+      "The Meta OAuth request has expired. " +
+        "Start the connection again.",
+    );
+  }
+
+  return {
+    shop,
+    host,
+    createdAt,
+  };
+}
+
+
+async function fetchMetaJson<T>(
+  url: string,
+): Promise<T> {
+  const response =
+    await fetch(url, {
+      method: "GET",
+      headers: {
+        Accept: "application/json",
+      },
+    });
+
+  let result:
+    T & {
+      error?: MetaError;
+    };
+
+  try {
+    result =
+      (await response.json()) as
+        T & {
+          error?: MetaError;
+        };
+  } catch {
+    throw new Error(
+      `Meta returned an invalid response ` +
+        `with HTTP ${response.status}.`,
+    );
+  }
+
+  if (
+    !response.ok ||
+    result.error
+  ) {
+    throw new Error(
+      result.error?.message ||
+        `Meta request failed with HTTP ` +
+          `${response.status}.`,
+    );
+  }
+
+  return result;
+}
+
+
+async function exchangeAuthorizationCode({
+  code,
+  appId,
+  appSecret,
+  redirectUri,
+}: {
+  code: string;
+  appId: string;
+  appSecret: string;
+  redirectUri: string;
+}): Promise<MetaTokenResponse> {
+  const params =
+    new URLSearchParams({
+      client_id: appId,
+      client_secret: appSecret,
+      redirect_uri: redirectUri,
+      code,
+    });
+
+  return fetchMetaJson<MetaTokenResponse>(
+    `${META_GRAPH_API_BASE}/oauth/access_token?` +
+      params.toString(),
+  );
+}
+
+
+async function exchangeLongLivedToken({
+  shortLivedToken,
+  appId,
+  appSecret,
+}: {
+  shortLivedToken: string;
+  appId: string;
+  appSecret: string;
+}): Promise<MetaTokenResponse> {
+  const params =
+    new URLSearchParams({
+      grant_type:
+        "fb_exchange_token",
+      client_id:
+        appId,
+      client_secret:
+        appSecret,
+      fb_exchange_token:
+        shortLivedToken,
+    });
+
+  return fetchMetaJson<MetaTokenResponse>(
+    `${META_GRAPH_API_BASE}/oauth/access_token?` +
+      params.toString(),
+  );
+}
+
+
+async function getFacebookUserId(
+  accessToken: string,
+): Promise<string | undefined> {
+  const params =
+    new URLSearchParams({
+      fields: "id",
+      access_token: accessToken,
+    });
+
+  const result =
+    await fetchMetaJson<MetaUserResponse>(
+      `${META_GRAPH_API_BASE}/me?` +
+        params.toString(),
+    );
+
+  return result.id;
+}
+
+
+async function getFacebookPages(
+  accessToken: string,
+): Promise<MetaPage[]> {
+  const pages: MetaPage[] = [];
+
+  const params =
+    new URLSearchParams({
+      fields:
+        "id,name,access_token," +
+        "instagram_business_account{id,username}",
+      limit: "100",
+      access_token: accessToken,
+    });
+
+  let nextUrl:
+    string | undefined =
+      `${META_GRAPH_API_BASE}/me/accounts?` +
+      params.toString();
+
+  while (nextUrl) {
+    const result =
+      await fetchMetaJson<MetaPagesResponse>(
+        nextUrl,
+      );
+
+    pages.push(
+      ...(result.data ?? []),
+    );
+
+    nextUrl =
+      result.paging?.next;
+  }
+
+  return pages;
+}
+
+
+function sanitizePagesForLog(
+  pages: MetaPage[],
+) {
+  return pages.map(
+    (page) => ({
+      id:
+        page.id,
+      name:
+        page.name,
+      hasPageAccessToken:
+        Boolean(page.access_token),
+      instagramBusinessAccount:
+        page.instagram_business_account
+          ? {
+              id:
+                page
+                  .instagram_business_account
+                  .id,
+              username:
+                page
+                  .instagram_business_account
+                  .username,
+            }
+          : null,
+    }),
+  );
+}
+
+
+function selectInstagramPage(
+  pages: MetaPage[],
+): MetaPage {
+  const connectedPages =
+    pages.filter(
+      (page) =>
+        Boolean(page.id) &&
+        Boolean(page.access_token) &&
+        Boolean(
+          page
+            .instagram_business_account
+            ?.id,
+        ),
+    );
+
+  if (
+    connectedPages.length === 0
+  ) {
+    throw new Error(
+      "No Instagram professional account was found. " +
+        "Connect an Instagram Business or Creator account " +
+        "to a Facebook Page and try again.",
+    );
+  }
+
+  const preferredInstagramId =
+    process.env
+      .META_PREFERRED_INSTAGRAM_ACCOUNT_ID
+      ?.trim();
+
+  if (preferredInstagramId) {
+    const preferredPage =
+      connectedPages.find(
+        (page) =>
+          page
+            .instagram_business_account
+            ?.id ===
+          preferredInstagramId,
+      );
+
+    if (!preferredPage) {
+      throw new Error(
+        "The preferred Instagram account was not found " +
+          "among the Facebook Pages authorized by this user.",
+      );
+    }
+
+    return preferredPage;
+  }
+
+  return connectedPages[0];
+}
+
+
+/**
+ * Builds a Shopify Admin URL that reopens the embedded app.
+ *
+ * SHOPIFY_APP_HANDLE may contain either the configured app handle
+ * or the Shopify Client ID, depending on the Admin URL generated
+ * for this application.
+ */
+function buildInstagramRedirect({
+  state,
+  success,
+  message,
+}: {
+  state: OAuthState;
+  success: boolean;
+  message?: string;
+}): string {
+  const appHandle =
+    process.env.SHOPIFY_APP_HANDLE?.trim() ||
+    process.env.SHOPIFY_API_KEY?.trim();
+
+  if (!appHandle) {
+    throw new Error(
+      "SHOPIFY_APP_HANDLE and SHOPIFY_API_KEY are missing.",
+    );
+  }
+
+  const storeHandle =
+    state.shop.replace(
+      /\.myshopify\.com$/i,
+      "",
+    );
+
+  const params =
+    new URLSearchParams();
+
+  if (success) {
+    params.set(
+      "instagramConnection",
+      "success",
+    );
+  } else {
+    params.set(
+      "instagramConnection",
+      "error",
+    );
+
+    params.set(
+      "instagramError",
+      message ||
+        "Instagram connection failed.",
+    );
+  }
+
+  return (
+    `https://admin.shopify.com/store/` +
+    `${encodeURIComponent(storeHandle)}/apps/` +
+    `${encodeURIComponent(appHandle)}/app/instagram?` +
+    params.toString()
+  );
+}
+
+
+/**
+ * Used only when the OAuth state cannot be parsed and the callback
+ * therefore does not know which Shopify store to return to.
+ */
+function buildFallbackRedirect(
+  message: string,
+): string {
+  const params =
+    new URLSearchParams({
+      instagramConnection:
+        "error",
+      instagramError:
+        message,
+    });
+
+  return (
+    `/app/instagram?` +
+    params.toString()
+  );
+}
+
+
+/**
+ * Returns an HTML response that navigates the top-level browser
+ * back into Shopify Admin.
+ *
+ * A standard 302 redirect can leave the embedded application stuck
+ * on /auth/session-token after returning from Meta.
+ */
+function redirectToShopifyAdmin(
+  destination: string,
+): Response {
+  const safeDestination =
+    JSON.stringify(destination)
+      .replace(/</g, "\\u003c")
+      .replace(/>/g, "\\u003e")
+      .replace(/&/g, "\\u0026");
+
+  const escapedHtmlDestination =
+    destination
+      .replace(/&/g, "&amp;")
+      .replace(/"/g, "&quot;")
+      .replace(/</g, "&lt;")
+      .replace(/>/g, "&gt;");
+
+  const html =
+    `<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta
+      name="viewport"
+      content="width=device-width, initial-scale=1"
+    />
+    <meta
+      http-equiv="refresh"
+      content="1;url=${escapedHtmlDestination}"
+    />
+    <title>Returning to Shopify</title>
+  </head>
+
+  <body>
+    <p>Returning to Shopify…</p>
+
+    <script>
+      (function () {
+        var destination = ${safeDestination};
+
+        try {
+          if (window.top) {
+            window.top.location.replace(destination);
+            return;
+          }
+        } catch (error) {
+          console.error(
+            "Top-level Shopify navigation failed:",
+            error
+          );
+        }
+
+        window.location.replace(destination);
+      })();
+    </script>
+
+    <noscript>
+      <p>
+        JavaScript is required to return to Shopify.
+        <a href="${escapedHtmlDestination}">
+          Continue to Shopify
+        </a>
+      </p>
+    </noscript>
+  </body>
+</html>`;
+
+  return new Response(
+    html,
+    {
+      status: 200,
+      headers: {
+        "Content-Type":
+          "text/html; charset=utf-8",
+        "Cache-Control":
+          "no-store, no-cache, must-revalidate",
+        Pragma:
+          "no-cache",
+        Expires:
+          "0",
+      },
+    },
+  );
+}
+
+
+export const loader = async ({
+  request,
+}: LoaderFunctionArgs) => {
+  const requestUrl =
+    new URL(request.url);
+
+  const code =
+    requestUrl.searchParams.get(
+      "code",
+    );
+
+  const stateValue =
+    requestUrl.searchParams.get(
+      "state",
+    );
+
+  const metaError =
+    requestUrl.searchParams.get(
+      "error",
+    );
+
+  const metaErrorDescription =
+    requestUrl.searchParams.get(
+      "error_description",
+    );
+
+  let state: OAuthState;
+
+  try {
+    state =
+      parseOAuthState(
+        stateValue,
+      );
+  } catch (error) {
+    const message =
+      getErrorMessage(error);
+
+    console.error(
+      "Instagram OAuth state failed:",
+      error,
+    );
+
+    return redirect(
+      buildFallbackRedirect(
+        message,
+      ),
+    );
+  }
+
+  if (metaError) {
+    return redirectToShopifyAdmin(
+      buildInstagramRedirect({
+        state,
+        success: false,
+        message:
+          metaErrorDescription ||
+          `Meta authorization failed: ${metaError}.`,
+      }),
+    );
+  }
+
+  if (!code) {
+    return redirectToShopifyAdmin(
+      buildInstagramRedirect({
+        state,
+        success: false,
+        message:
+          "Meta did not return an authorization code.",
+      }),
+    );
+  }
+
+  try {
+    const metaAppId =
+      requireEnvironmentVariable(
+        "META_APP_ID",
+      );
+
+    const metaAppSecret =
+      requireEnvironmentVariable(
+        "META_APP_SECRET",
+      );
+
+    const metaRedirectUri =
+      requireEnvironmentVariable(
+        "META_REDIRECT_URI",
+      );
+
+    const shortLivedTokenResponse =
+      await exchangeAuthorizationCode({
+        code,
+        appId:
+          metaAppId,
+        appSecret:
+          metaAppSecret,
+        redirectUri:
+          metaRedirectUri,
+      });
+
+    const shortLivedToken =
+      shortLivedTokenResponse
+        .access_token;
+
+    if (!shortLivedToken) {
+      throw new Error(
+        "Meta did not return a short-lived access token.",
+      );
+    }
+
+    /*
+     * A successful connection now requires a long-lived token.
+     * The app no longer falls back to the short-lived token.
+     */
+    const longLivedTokenResponse =
+      await exchangeLongLivedToken({
+        shortLivedToken,
+        appId:
+          metaAppId,
+        appSecret:
+          metaAppSecret,
+      });
+
+    const longLivedToken =
+      longLivedTokenResponse
+        .access_token;
+
+    if (!longLivedToken) {
+      throw new Error(
+        "Meta did not return a long-lived access token.",
+      );
+    }
+
+    console.log(
+      "META TOKEN DEBUG:",
+      {
+        shortLivedTokenExists:
+          Boolean(shortLivedToken),
+        longLivedTokenExists:
+          Boolean(longLivedToken),
+        shortLivedTokenType:
+          shortLivedTokenResponse
+            .token_type ||
+          null,
+        longLivedTokenType:
+          longLivedTokenResponse
+            .token_type ||
+          null,
+        longLivedExpiresIn:
+          longLivedTokenResponse
+            .expires_in ||
+          null,
+      },
+    );
+
+    /*
+     * All account and Page requests use the long-lived token.
+     * There is no short-lived-token fallback.
+     */
+    const facebookUserId =
+      await getFacebookUserId(
+        longLivedToken,
+      );
+
+    const pages =
+      await getFacebookPages(
+        longLivedToken,
+      );
+
+    console.log(
+      "META LONG-LIVED TOKEN RESULT:",
+      {
+        facebookUserId:
+          facebookUserId ||
+          null,
+        pages:
+          sanitizePagesForLog(
+            pages,
+          ),
+      },
+    );
+
+    if (pages.length === 0) {
+      throw new Error(
+        "Meta returned no Facebook Pages for the long-lived token.",
+      );
+    }
+
+    const selectedPage =
+      selectInstagramPage(
+        pages,
+      );
+
+    const instagramAccount =
+      selectedPage
+        .instagram_business_account;
+
+    if (
+      !selectedPage.id ||
+      !selectedPage.access_token ||
+      !instagramAccount?.id
+    ) {
+      throw new Error(
+        "The selected Facebook Page does not have " +
+          "a usable Instagram professional account.",
+      );
+    }
+
+    const issuedAt =
+      new Date();
+
+    /*
+     * The token being saved below is the Page access token returned
+     * by /me/accounts. Meta's expires_in value belongs to the
+     * long-lived user token, not necessarily to the Page token.
+     *
+     * Therefore tokenExpiresAt is intentionally left undefined here
+     * rather than storing an inaccurate expiration date.
+     */
+    await upsertInstagramAccount({
+      shop:
+        state.shop,
+      pageId:
+        selectedPage.id,
+      instagramId:
+        instagramAccount.id,
+      facebookUserId:
+        facebookUserId,
+      username:
+        instagramAccount.username,
+      accessToken:
+        selectedPage.access_token,
+      tokenType:
+        "page_access_token",
+      tokenIssuedAt:
+        issuedAt,
+      tokenExpiresAt:
+        undefined,
+      grantedScopes: [
+        "pages_show_list",
+        "pages_read_engagement",
+        "instagram_basic",
+      ].join(","),
+      connected:
+        true,
+    });
+
+    console.log(
+      "INSTAGRAM ACCOUNT CONNECTED:",
+      {
+        shop:
+          state.shop,
+        pageId:
+          selectedPage.id,
+        instagramId:
+          instagramAccount.id,
+        username:
+          instagramAccount.username ||
+          null,
+        tokenStored:
+          "PAGE_ACCESS_TOKEN",
+      },
+    );
+
+    return redirectToShopifyAdmin(
+      buildInstagramRedirect({
+        state,
+        success: true,
+      }),
+    );
+  } catch (error) {
+    console.error(
+      "Instagram OAuth callback failed:",
+      error,
+    );
+
+    return redirectToShopifyAdmin(
+      buildInstagramRedirect({
+        state,
+        success: false,
+        message:
+          getErrorMessage(error),
+      }),
+    );
+  }
+};
+
+
+export default function InstagramCallbackRoute() {
+  return null;
+}
+
+
+export const headers:
+  HeadersFunction = (
+    headersArgs,
+  ) => {
+    return boundary.headers(
+      headersArgs,
+    );
+  };

@@ -3,6 +3,10 @@ import type {
 } from "react-router";
 
 import db from "../db.server";
+import {
+  getInstagramAccount,
+  syncInstagramPosts,
+} from "../models/instagram-feed.server";
 
 
 const corsHeaders = {
@@ -89,6 +93,25 @@ export const loader = async ({
   }
 
   try {
+    const account =
+      await getInstagramAccount(shop);
+
+    if (
+      account?.lastSyncedAt &&
+      Date.now() -
+        account.lastSyncedAt.getTime() >
+        6 * 60 * 60 * 1000
+    ) {
+      syncInstagramPosts(shop).catch(
+        (error) => {
+          console.error(
+            "Automatic Instagram resync failed:",
+            error,
+          );
+        },
+      );
+    }
+
     const posts =
       await db.instagramPost.findMany({
         where: {
